@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест назначения PM</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .result { margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; }
+        .error { background: #f8d7da; color: #721c24; }
+        .success { background: #d4edda; color: #155724; }
+        .application { margin: 10px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; }
+        .pm-card { margin: 10px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #f0f8ff; }
+        .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .status.pending { background: #fff3cd; color: #856404; }
+        .status.approved { background: #d4edda; color: #155724; }
+        .status.rejected { background: #f8d7da; color: #721c24; }
+        .status.available { background: #d4edda; color: #155724; }
+        .status.busy { background: #fff3cd; color: #856404; }
+        .status.unavailable { background: #f8d7da; color: #721c24; }
+        .pm-info { background: #e9ecef; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .categories { display: flex; flex-wrap: wrap; gap: 5px; margin: 5px 0; }
+        .category { background: #007bff; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <h1>Тест назначения проект-менеджеров</h1>
+
+    <!-- Вход админа -->
+    <div class="section">
+        <h2>1. Войти как админ</h2>
+        <div class="form-group">
+            <label>Email админа:</label>
+            <input type="email" id="adminEmail" value="admin@test.com">
+        </div>
+        <div class="form-group">
+            <label>Пароль:</label>
+            <input type="password" id="adminPassword" value="123456">
+        </div>
+        <button onclick="loginAdmin()">Войти</button>
+        <div id="loginResult" class="result" style="display: none;"></div>
+    </div>
+
+    <!-- Просмотр проект-менеджеров -->
+    <div class="section">
+        <h2>2. Проект-менеджеры</h2>
+        <button onclick="loadProjectManagers()">Загрузить PM</button>
+        <div id="pmResult" class="result" style="display: none;"></div>
+        <div id="pmList"></div>
+    </div>
+
+    <!-- Создание тестовой заявки -->
+    <div class="section">
+        <h2>3. Создать тестовую заявку</h2>
+        <form id="testApplicationForm">
+            <div class="form-group">
+                <label>Название проекта:</label>
+                <input type="text" name="projectTitle" value="Разработка мобильного приложения для доставки" required>
+            </div>
+            <div class="form-group">
+                <label>Описание проекта:</label>
+                <textarea name="projectDescription" rows="3" required>Нужно создать мобильное приложение для iOS и Android для службы доставки еды. Требуется интеграция с картами, платежными системами и системой уведомлений.</textarea>
+            </div>
+            <div class="form-group">
+                <label>ФИО заказчика:</label>
+                <input type="text" name="fullName" value="Петр Сидоров" required>
+            </div>
+            <div class="form-group">
+                <label>Телефон:</label>
+                <input type="tel" name="phone" value="+7 999 888-77-66" required>
+            </div>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" name="email" value="petr@delivery.com">
+            </div>
+            <div class="form-group">
+                <label>Техническое задание:</label>
+                <textarea name="techSpec" rows="2">React Native, Firebase, Google Maps API, Stripe, Push notifications</textarea>
+            </div>
+            <button type="submit">Создать заявку</button>
+        </form>
+        <div id="createApplicationResult" class="result" style="display: none;"></div>
+    </div>
+
+    <!-- Просмотр и назначение PM на заявки -->
+    <div class="section">
+        <h2>4. Заявки и назначение PM</h2>
+        <button onclick="loadApplications()">Загрузить заявки</button>
+        <div id="applicationsResult" class="result" style="display: none;"></div>
+        <div id="applicationsList"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let authToken = null;
+        let projectManagers = [];
+
+        // Вход админа
+        async function loginAdmin() {
+            try {
+                const email = document.getElementById('adminEmail').value;
+                const password = document.getElementById('adminPassword').value;
+                
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    showResult('loginResult', 'Вход выполнен успешно!', 'success');
+                } else {
+                    throw new Error(data.message || 'Ошибка входа');
+                }
+            } catch (error) {
+                showResult('loginResult', `Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        // Загрузка проект-менеджеров
+        async function loadProjectManagers() {
+            if (!authToken) {
+                showResult('pmResult', 'Сначала войдите как админ', 'error');
+                return;
+            }
+            
+            try {
+                console.log('Загружаем пользователей с токеном:', authToken);
+                
+                const response = await fetch(`${API_BASE}/users`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                console.log('Ответ сервера:', response.status, response.statusText);
+                
+                const users = await response.json();
+                console.log('Полученные пользователи:', users);
+                
+                if (response.ok) {
+                    projectManagers = users.filter(user => {
+                        console.log('Проверяем пользователя:', user.displayName, 'Роли:', user.roles);
+                        return user.roles && user.roles.includes('project_manager');
+                    });
+                    console.log('Найдено PM:', projectManagers.length);
+                    showResult('pmResult', `Загружено ${projectManagers.length} проект-менеджеров`, 'success');
+                    displayProjectManagers(projectManagers);
+                } else {
+                    throw new Error(users.message || 'Ошибка загрузки PM');
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки PM:', error);
+                showResult('pmResult', `Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        // Отображение проект-менеджеров
+        function displayProjectManagers(pms) {
+            const container = document.getElementById('pmList');
+            
+            if (pms.length === 0) {
+                container.innerHTML = '<p>Проект-менеджеры не найдены</p>';
+                return;
+            }
+            
+            container.innerHTML = pms.map(pm => `
+                <div class="pm-card">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                        <h3>${pm.displayName}</h3>
+                        <span class="status ${pm.availability || 'available'}">${getAvailabilityText(pm.availability)}</span>
+                    </div>
+                    <p><strong>Email:</strong> ${pm.email}</p>
+                    <p><strong>Специализация:</strong> ${pm.specialization || 'Не указана'}</p>
+                    <p><strong>Опыт:</strong> ${pm.experience || 'Не указан'}</p>
+                    <p><strong>Загруженность:</strong> ${pm.workload || 0}%</p>
+                    ${pm.categories ? `
+                        <div class="categories">
+                            ${pm.categories.map(cat => `<span class="category">${cat}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                    ${pm.description ? `<p><strong>Описание:</strong> ${pm.description}</p>` : ''}
+                    ${pm.stats ? `
+                        <div class="pm-info">
+                            <strong>Статистика:</strong> 
+                            Завершено: ${pm.stats.projectsCompleted} | 
+                            Активных: ${pm.stats.projectsActive}
+                            ${pm.stats.averageRating > 0 ? ` | Рейтинг: ${pm.stats.averageRating.toFixed(1)}` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Создание тестовой заявки
+        document.getElementById('testApplicationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            try {
+                const formData = new FormData(e.target);
+                
+                const response = await fetch(`${API_BASE}/applications`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('createApplicationResult', `Заявка создана! ID: ${data.applicationId}`, 'success');
+                    e.target.reset();
+                } else {
+                    throw new Error(data.message || 'Ошибка при создании заявки');
+                }
+            } catch (error) {
+                showResult('createApplicationResult', `Ошибка: ${error.message}`, 'error');
+            }
+        });
+
+        // Загрузка заявок
+        async function loadApplications() {
+            if (!authToken) {
+                showResult('applicationsResult', 'Сначала войдите как админ', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/applications`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const applications = await response.json();
+                
+                if (response.ok) {
+                    showResult('applicationsResult', `Загружено ${applications.length} заявок`, 'success');
+                    displayApplications(applications);
+                } else {
+                    throw new Error(applications.message || 'Ошибка загрузки заявок');
+                }
+            } catch (error) {
+                showResult('applicationsResult', `Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        // Отображение заявок
+        function displayApplications(applications) {
+            const container = document.getElementById('applicationsList');
+            
+            if (applications.length === 0) {
+                container.innerHTML = '<p>Заявок не найдено</p>';
+                return;
+            }
+            
+            container.innerHTML = applications.map(app => `
+                <div class="application">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                        <h3>${app.projectTitle}</h3>
+                        <span class="status ${app.status}">${getStatusText(app.status)}</span>
+                    </div>
+                    <p><strong>Заказчик:</strong> ${app.fullName}</p>
+                    <p><strong>Телефон:</strong> ${app.phone}</p>
+                    ${app.email ? `<p><strong>Email:</strong> ${app.email}</p>` : ''}
+                    <p><strong>Описание:</strong> ${app.projectDescription}</p>
+                    ${app.techSpec ? `<p><strong>ТЗ:</strong> ${app.techSpec}</p>` : ''}
+                    <p><strong>Создано:</strong> ${new Date(app.createdAt).toLocaleString('ru-RU')}</p>
+                    
+                    ${app.status === 'pending' ? `
+                        <div style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                            <h4>Назначить проект-менеджера:</h4>
+                            <select id="pm-select-${app.id}" style="width: 100%; margin: 10px 0;">
+                                <option value="">Без назначения PM</option>
+                                ${projectManagers.map(pm => `
+                                    <option value="${pm.uid}" data-specialization="${pm.specialization}" data-categories="${pm.categories?.join(',') || ''}">
+                                        ${pm.displayName} - ${pm.specialization} (${pm.availability || 'available'})
+                                    </option>
+                                `).join('')}
+                            </select>
+                            <div id="pm-info-${app.id}" style="margin: 10px 0; padding: 10px; background: #e9ecef; border-radius: 4px; display: none;"></div>
+                            <div style="margin-top: 10px;">
+                                <button onclick="approveWithPM('${app.id}')" style="background: #28a745; margin-right: 10px;">
+                                    Одобрить с PM
+                                </button>
+                                <button onclick="rejectApplication('${app.id}')" style="background: #dc3545;">
+                                    Отклонить
+                                </button>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    ${app.assignedTeamLead ? `
+                        <div style="margin-top: 10px; padding: 10px; background: #d4edda; border-radius: 4px;">
+                            <strong>Назначенный PM:</strong> ${getAssignedPMName(app.assignedTeamLead)}
+                        </div>
+                    ` : ''}
+                    
+                    ${app.rejectionReason ? `
+                        <div style="margin-top: 10px; padding: 10px; background: #f8d7da; border-radius: 4px;">
+                            <strong>Причина отклонения:</strong> ${app.rejectionReason}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            
+            // Добавляем обработчики для селектов PM
+            applications.forEach(app => {
+                if (app.status === 'pending') {
+                    const select = document.getElementById(`pm-select-${app.id}`);
+                    if (select) {
+                        select.addEventListener('change', (e) => showPMInfo(app.id, e.target.value));
+                    }
+                }
+            });
+        }
+
+        // Показать информацию о выбранном PM
+        function showPMInfo(applicationId, pmId) {
+            const infoDiv = document.getElementById(`pm-info-${applicationId}`);
+            
+            if (!pmId) {
+                infoDiv.style.display = 'none';
+                return;
+            }
+            
+            const pm = projectManagers.find(p => p.uid === pmId);
+            if (!pm) {
+                infoDiv.style.display = 'none';
+                return;
+            }
+            
+            infoDiv.innerHTML = `
+                <h5>${pm.displayName}</h5>
+                <p><strong>Специализация:</strong> ${pm.specialization}</p>
+                <p><strong>Опыт:</strong> ${pm.experience}</p>
+                <p><strong>Статус:</strong> ${getAvailabilityText(pm.availability)}</p>
+                <p><strong>Загруженность:</strong> ${pm.workload || 0}%</p>
+                ${pm.categories ? `<p><strong>Категории:</strong> ${pm.categories.join(', ')}</p>` : ''}
+                ${pm.description ? `<p><strong>Описание:</strong> ${pm.description}</p>` : ''}
+            `;
+            infoDiv.style.display = 'block';
+        }
+
+        // Одобрить заявку с назначением PM
+        async function approveWithPM(applicationId) {
+            if (!authToken) {
+                alert('Сначала войдите как админ');
+                return;
+            }
+            
+            const select = document.getElementById(`pm-select-${applicationId}`);
+            const pmId = select?.value || undefined;
+            
+            try {
+                const response = await fetch(`${API_BASE}/applications/${applicationId}/approve`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ teamLeadId: pmId })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(`Заявка одобрена! ${pmId ? 'PM назначен.' : 'Без назначения PM.'}`);
+                    loadApplications(); // Перезагружаем список
+                } else {
+                    throw new Error(data.message || 'Ошибка одобрения заявки');
+                }
+            } catch (error) {
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+
+        // Отклонить заявку
+        async function rejectApplication(applicationId) {
+            if (!authToken) {
+                alert('Сначала войдите как админ');
+                return;
+            }
+            
+            const reason = prompt('Укажите причину отклонения (необязательно):');
+            
+            try {
+                const response = await fetch(`${API_BASE}/applications/${applicationId}/reject`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ reason })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('Заявка отклонена');
+                    loadApplications(); // Перезагружаем список
+                } else {
+                    throw new Error(data.message || 'Ошибка отклонения заявки');
+                }
+            } catch (error) {
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+
+        // Вспомогательные функции
+        function getStatusText(status) {
+            switch (status) {
+                case 'pending': return 'Ожидает';
+                case 'approved': return 'Одобрена';
+                case 'rejected': return 'Отклонена';
+                default: return status;
+            }
+        }
+
+        function getAvailabilityText(availability) {
+            switch (availability) {
+                case 'available': return 'Доступен';
+                case 'busy': return 'Занят';
+                case 'unavailable': return 'Недоступен';
+                default: return 'Доступен';
+            }
+        }
+
+        function getAssignedPMName(pmId) {
+            const pm = projectManagers.find(p => p.uid === pmId);
+            return pm ? `${pm.displayName} (${pm.specialization})` : pmId;
+        }
+
+        function showResult(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

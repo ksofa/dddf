@@ -1,0 +1,160 @@
+openapi: 3.0.0
+info:
+  title: Taska API
+  version: 1.0.0
+  description: |
+    API для платформы Taska (управление проектами, заявками, чатами)
+servers:
+  - url: http://localhost:5174/api
+paths:
+  /register:
+    post:
+      summary: Регистрация пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                name:
+                  type: string
+                role:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /login:
+    post:
+      summary: Вход пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /projects:
+    post:
+      summary: Создать проект
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                customerId:
+                  type: string
+                team:
+                  type: array
+                  items:
+                    type: string
+                status:
+                  type: string
+      responses:
+        '200':
+          description: OK
+    get:
+      summary: Получить список проектов
+      responses:
+        '200':
+          description: OK
+  /applications:
+    post:
+      summary: Создать заявку
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                projectId:
+                  type: string
+                userId:
+                  type: string
+                status:
+                  type: string
+      responses:
+        '200':
+          description: OK
+    get:
+      summary: Получить список заявок
+      responses:
+        '200':
+          description: OK
+  /chats:
+    post:
+      summary: Создать чат
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                members:
+                  type: array
+                  items:
+                    type: string
+                projectId:
+                  type: string
+                type:
+                  type: string
+      responses:
+        '200':
+          description: OK
+    get:
+      summary: Получить список чатов
+      responses:
+        '200':
+          description: OK
+  /messages:
+    post:
+      summary: Отправить сообщение
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chatId:
+                  type: string
+                senderId:
+                  type: string
+                text:
+                  type: string
+                attachments:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: OK
+    get:
+      summary: Получить сообщения чата
+      parameters:
+        - in: query
+          name: chatId
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK 

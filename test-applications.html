@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест Заявок</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; }
+        .form-group { margin: 10px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; }
+        .error { background: #f8d7da; color: #721c24; }
+        .success { background: #d4edda; color: #155724; }
+        .application { margin: 10px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; }
+        .status { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .status.pending { background: #fff3cd; color: #856404; }
+        .status.approved { background: #d4edda; color: #155724; }
+        .status.rejected { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Тест API Заявок</h1>
+
+    <!-- Создание заявки -->
+    <div class="section">
+        <h2>1. Создать заявку</h2>
+        <form id="applicationForm">
+            <div class="form-group">
+                <label>ФИО:</label>
+                <input type="text" name="fullName" value="Иван Иванов" required>
+            </div>
+            <div class="form-group">
+                <label>Телефон:</label>
+                <input type="tel" name="phone" value="+7 999 123-45-67" required>
+            </div>
+            <div class="form-group">
+                <label>Название проекта:</label>
+                <input type="text" name="projectTitle" value="Разработка веб-приложения" required>
+            </div>
+            <div class="form-group">
+                <label>Описание проекта:</label>
+                <textarea name="projectDescription" rows="3" required>Нужно создать современное веб-приложение для управления задачами команды</textarea>
+            </div>
+            <div class="form-group">
+                <label>Email (необязательно):</label>
+                <input type="email" name="email" value="ivan@test.com">
+            </div>
+            <div class="form-group">
+                <label>Техническое задание (необязательно):</label>
+                <textarea name="techSpec" rows="2">React, Node.js, PostgreSQL, REST API</textarea>
+            </div>
+            <div class="form-group">
+                <label>Файл ТЗ (необязательно):</label>
+                <input type="file" name="techSpecFile" accept=".pdf,.doc,.docx,.txt,.jpg,.png">
+            </div>
+            <button type="submit" id="submitBtn">Отправить заявку</button>
+        </form>
+        <div id="createResult" class="result" style="display: none;"></div>
+    </div>
+
+    <!-- Вход админа -->
+    <div class="section">
+        <h2>2. Войти как админ</h2>
+        <div class="form-group">
+            <label>Email админа:</label>
+            <input type="email" id="adminEmail" value="admin@test.com">
+        </div>
+        <div class="form-group">
+            <label>Пароль:</label>
+            <input type="password" id="adminPassword" value="123456">
+        </div>
+        <button onclick="loginAdmin()">Войти</button>
+        <div id="loginResult" class="result" style="display: none;"></div>
+    </div>
+
+    <!-- Просмотр заявок -->
+    <div class="section">
+        <h2>3. Просмотр заявок (только для админов)</h2>
+        <div class="form-group">
+            <label>Фильтр по статусу:</label>
+            <select id="statusFilter">
+                <option value="">Все статусы</option>
+                <option value="pending">Ожидают</option>
+                <option value="approved">Одобрены</option>
+                <option value="rejected">Отклонены</option>
+            </select>
+        </div>
+        <button onclick="loadApplications()">Загрузить заявки</button>
+        <div id="applicationsResult" class="result" style="display: none;"></div>
+        <div id="applicationsList"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let authToken = null;
+
+        // Создание заявки
+        document.getElementById('applicationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const result = document.getElementById('createResult');
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Отправка...';
+            
+            try {
+                const formData = new FormData(e.target);
+                
+                const response = await fetch(`${API_BASE}/applications`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('createResult', `Заявка создана успешно! ID: ${data.applicationId}`, 'success');
+                    e.target.reset();
+                } else {
+                    throw new Error(data.message || 'Ошибка при создании заявки');
+                }
+            } catch (error) {
+                showResult('createResult', `Ошибка: ${error.message}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Отправить заявку';
+            }
+        });
+
+        // Вход админа
+        async function loginAdmin() {
+            try {
+                const email = document.getElementById('adminEmail').value;
+                const password = document.getElementById('adminPassword').value;
+                
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    showResult('loginResult', 'Вход выполнен успешно!', 'success');
+                } else {
+                    throw new Error(data.message || 'Ошибка входа');
+                }
+            } catch (error) {
+                showResult('loginResult', `Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        // Загрузка заявок
+        async function loadApplications() {
+            if (!authToken) {
+                showResult('applicationsResult', 'Сначала войдите как админ', 'error');
+                return;
+            }
+            
+            try {
+                const statusFilter = document.getElementById('statusFilter').value;
+                const params = new URLSearchParams();
+                if (statusFilter) params.append('status', statusFilter);
+                
+                const response = await fetch(`${API_BASE}/applications?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const applications = await response.json();
+                
+                if (response.ok) {
+                    showResult('applicationsResult', `Загружено ${applications.length} заявок`, 'success');
+                    displayApplications(applications);
+                } else {
+                    throw new Error(applications.message || 'Ошибка загрузки заявок');
+                }
+            } catch (error) {
+                showResult('applicationsResult', `Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        // Отображение заявок
+        function displayApplications(applications) {
+            const container = document.getElementById('applicationsList');
+            
+            if (applications.length === 0) {
+                container.innerHTML = '<p>Заявок не найдено</p>';
+                return;
+            }
+            
+            container.innerHTML = applications.map(app => `
+                <div class="application">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                        <h3>${app.projectTitle}</h3>
+                        <span class="status ${app.status}">${getStatusText(app.status)}</span>
+                    </div>
+                    <p><strong>ФИО:</strong> ${app.fullName}</p>
+                    <p><strong>Телефон:</strong> ${app.phone}</p>
+                    ${app.email ? `<p><strong>Email:</strong> ${app.email}</p>` : ''}
+                    <p><strong>Описание:</strong> ${app.projectDescription}</p>
+                    ${app.techSpec ? `<p><strong>ТЗ:</strong> ${app.techSpec}</p>` : ''}
+                    ${app.techSpecFile ? `<p><strong>Файл:</strong> ${app.techSpecFile.originalName} (${Math.round(app.techSpecFile.size / 1024)} KB)</p>` : ''}
+                    <p><strong>Создано:</strong> ${new Date(app.createdAt).toLocaleString('ru-RU')}</p>
+                    ${app.status === 'pending' ? `
+                        <div style="margin-top: 10px;">
+                            <button onclick="approveApplication('${app.id}')" style="background: #28a745; margin-right: 10px;">
+                                Одобрить
+                            </button>
+                            <button onclick="rejectApplication('${app.id}')" style="background: #dc3545;">
+                                Отклонить
+                            </button>
+                        </div>
+                    ` : ''}
+                    ${app.rejectionReason ? `<p style="color: #dc3545;"><strong>Причина отклонения:</strong> ${app.rejectionReason}</p>` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Одобрить заявку
+        async function approveApplication(applicationId) {
+            if (!authToken) {
+                alert('Сначала войдите как админ');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/applications/${applicationId}/approve`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('Заявка одобрена успешно!');
+                    loadApplications(); // Перезагружаем список
+                } else {
+                    throw new Error(data.message || 'Ошибка одобрения заявки');
+                }
+            } catch (error) {
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+
+        // Отклонить заявку
+        async function rejectApplication(applicationId) {
+            if (!authToken) {
+                alert('Сначала войдите как админ');
+                return;
+            }
+            
+            const reason = prompt('Укажите причину отклонения (необязательно):');
+            
+            try {
+                const response = await fetch(`${API_BASE}/applications/${applicationId}/reject`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ reason })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert('Заявка отклонена');
+                    loadApplications(); // Перезагружаем список
+                } else {
+                    throw new Error(data.message || 'Ошибка отклонения заявки');
+                }
+            } catch (error) {
+                alert(`Ошибка: ${error.message}`);
+            }
+        }
+
+        // Вспомогательные функции
+        function getStatusText(status) {
+            switch (status) {
+                case 'pending': return 'Ожидает';
+                case 'approved': return 'Одобрена';
+                case 'rejected': return 'Отклонена';
+                default: return status;
+            }
+        }
+
+        function showResult(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+    </script>
+</body>
+</html> 

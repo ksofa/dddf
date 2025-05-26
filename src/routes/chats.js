@@ -212,7 +212,10 @@ router.get('/projects/:projectId/chats', authenticate, async (req, res) => {
     const hasAccess = 
       project.customerId === req.user.uid ||
       project.pmId === req.user.uid ||
+      project.teamLead === req.user.uid ||
       (project.team && project.team.includes(req.user.uid)) ||
+      (project.teamMembers && project.teamMembers.includes(req.user.uid)) ||
+      req.user.roles.includes('admin') ||
       req.user.roles.includes('presale') ||
       req.user.roles.includes('super-admin');
 
@@ -223,7 +226,8 @@ router.get('/projects/:projectId/chats', authenticate, async (req, res) => {
     const chatsSnapshot = await db.collection('projects')
       .doc(projectId)
       .collection('chats')
-      .orderBy('createdAt', 'desc')
+      .where('participants', 'array-contains', req.user.uid)
+      .orderBy('updatedAt', 'desc')
       .get();
 
     const chats = [];
@@ -238,7 +242,9 @@ router.get('/projects/:projectId/chats', authenticate, async (req, res) => {
           const userData = userDoc.data();
           participants.push({
             id: participantId,
-            fullName: userData.fullName,
+            name: userData.fullName || userData.displayName,
+            fullName: userData.fullName || userData.displayName,
+            displayName: userData.displayName || userData.fullName,
             profileImage: userData.profileImage
           });
         }
@@ -266,24 +272,274 @@ router.get('/projects/:projectId/chats', authenticate, async (req, res) => {
           text: messageData.text,
           timestamp: messageData.timestamp,
           sender: senderData ? {
-            id: senderData.uid,
-            fullName: senderData.fullName,
+            id: messageData.senderId,
+            name: senderData.fullName || senderData.displayName,
+            fullName: senderData.fullName || senderData.displayName,
+            displayName: senderData.displayName || senderData.fullName,
             profileImage: senderData.profileImage
           } : null
         };
       }
 
+      // Calculate unread count
+      const unreadMessagesSnapshot = await db.collection('projects')
+        .doc(projectId)
+        .collection('chats')
+        .doc(doc.id)
+        .collection('messages')
+        .where('readBy', 'not-in', [[req.user.uid]])
+        .get();
+
       chats.push({
         id: doc.id,
         ...chat,
         participants,
-        lastMessage
+        lastMessage,
+        unreadCount: unreadMessagesSnapshot.size
       });
     }
 
     res.json(chats);
   } catch (error) {
     console.error('Get chats error:', error);
+    res.status(500).json({ message: 'Error fetching chats' });
+  }
+});
+
+// Get all user chats (global chats across all projects and direct chats)
+router.get('/chats', authenticate, async (req, res) => {
+  try {
+    const userRoles = req.user.roles || [];
+    const allChats = [];
+
+    // 1. Для админов - все чаты системы
+    if (userRoles.includes('admin') || userRoles.includes('super-admin')) {
+      // Получаем все проекты
+      const projectsSnapshot = await db.collection('projects').get();
+      
+      for (const projectDoc of projectsSnapshot.docs) {
+        const chatsSnapshot = await db.collection('projects')
+          .doc(projectDoc.id)
+          .collection('chats')
+          .get();
+
+        for (const chatDoc of chatsSnapshot.docs) {
+          const chatData = chatDoc.data();
+          allChats.push({
+            id: chatDoc.id,
+            projectId: projectDoc.id,
+            projectTitle: projectDoc.data().title,
+            ...chatData
+          });
+        }
+      }
+
+      // Также добавляем глобальные чаты
+      const globalChatsSnapshot = await db.collection('global-chats').get();
+      globalChatsSnapshot.forEach(doc => {
+        allChats.push({
+          id: doc.id,
+          isGlobal: true,
+          ...doc.data()
+        });
+      });
+    }
+    // 2. Для PM - чаты своих проектов
+    else if (userRoles.includes('pm')) {
+      const projectsSnapshot = await db.collection('projects')
+        .where('pmId', '==', req.user.uid)
+        .get();
+
+      for (const projectDoc of projectsSnapshot.docs) {
+        const chatsSnapshot = await db.collection('projects')
+          .doc(projectDoc.id)
+          .collection('chats')
+          .where('participants', 'array-contains', req.user.uid)
+          .get();
+
+        for (const chatDoc of chatsSnapshot.docs) {
+          const chatData = chatDoc.data();
+          allChats.push({
+            id: chatDoc.id,
+            projectId: projectDoc.id,
+            projectTitle: projectDoc.data().title,
+            ...chatData
+          });
+        }
+      }
+
+      // Глобальные чаты где PM участник
+      const globalChatsSnapshot = await db.collection('global-chats')
+        .where('participants', 'array-contains', req.user.uid)
+        .get();
+      
+      globalChatsSnapshot.forEach(doc => {
+        allChats.push({
+          id: doc.id,
+          isGlobal: true,
+          ...doc.data()
+        });
+      });
+    }
+    // 3. Для исполнителей - чаты проектов где они участники + глобальные чаты
+    else if (userRoles.includes('executor')) {
+      const projectsSnapshot = await db.collection('projects')
+        .where('teamMembers', 'array-contains', req.user.uid)
+        .get();
+
+      for (const projectDoc of projectsSnapshot.docs) {
+        const chatsSnapshot = await db.collection('projects')
+          .doc(projectDoc.id)
+          .collection('chats')
+          .where('participants', 'array-contains', req.user.uid)
+          .get();
+
+        for (const chatDoc of chatsSnapshot.docs) {
+          const chatData = chatDoc.data();
+          allChats.push({
+            id: chatDoc.id,
+            projectId: projectDoc.id,
+            projectTitle: projectDoc.data().title,
+            ...chatData
+          });
+        }
+      }
+
+      // Глобальные чаты где исполнитель участник
+      const globalChatsSnapshot = await db.collection('global-chats')
+        .where('participants', 'array-contains', req.user.uid)
+        .get();
+      
+      globalChatsSnapshot.forEach(doc => {
+        allChats.push({
+          id: doc.id,
+          isGlobal: true,
+          ...doc.data()
+        });
+      });
+    }
+    // 4. Для заказчиков - чаты своих проектов
+    else if (userRoles.includes('customer')) {
+      const projectsSnapshot = await db.collection('projects')
+        .where('customerId', '==', req.user.uid)
+        .get();
+
+      for (const projectDoc of projectsSnapshot.docs) {
+        const chatsSnapshot = await db.collection('projects')
+          .doc(projectDoc.id)
+          .collection('chats')
+          .where('participants', 'array-contains', req.user.uid)
+          .get();
+
+        for (const chatDoc of chatsSnapshot.docs) {
+          const chatData = chatDoc.data();
+          allChats.push({
+            id: chatDoc.id,
+            projectId: projectDoc.id,
+            projectTitle: projectDoc.data().title,
+            ...chatData
+          });
+        }
+      }
+    }
+
+    // Обогащаем данные чатов
+    const enrichedChats = [];
+    for (const chat of allChats) {
+      // Получаем участников
+      const participants = [];
+      if (chat.participants) {
+        for (const participantId of chat.participants) {
+          const userDoc = await db.collection('users').doc(participantId).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            participants.push({
+              id: participantId,
+              name: userData.fullName || userData.displayName,
+              fullName: userData.fullName || userData.displayName,
+              displayName: userData.displayName || userData.fullName,
+              profileImage: userData.profileImage,
+              roles: userData.roles
+            });
+          }
+        }
+      }
+
+      // Получаем последнее сообщение
+      let lastMessage = null;
+      if (chat.isGlobal) {
+        const lastMessageSnapshot = await db.collection('global-chats')
+          .doc(chat.id)
+          .collection('messages')
+          .orderBy('timestamp', 'desc')
+          .limit(1)
+          .get();
+
+        if (!lastMessageSnapshot.empty) {
+          const messageDoc = lastMessageSnapshot.docs[0];
+          const messageData = messageDoc.data();
+          const senderDoc = await db.collection('users').doc(messageData.senderId).get();
+          const senderData = senderDoc.exists ? senderDoc.data() : null;
+
+          lastMessage = {
+            id: messageDoc.id,
+            text: messageData.text,
+            timestamp: messageData.timestamp,
+            sender: senderData ? {
+              id: messageData.senderId,
+              name: senderData.fullName || senderData.displayName,
+              fullName: senderData.fullName || senderData.displayName,
+              displayName: senderData.displayName || senderData.fullName
+            } : null
+          };
+        }
+      } else if (chat.projectId) {
+        const lastMessageSnapshot = await db.collection('projects')
+          .doc(chat.projectId)
+          .collection('chats')
+          .doc(chat.id)
+          .collection('messages')
+          .orderBy('timestamp', 'desc')
+          .limit(1)
+          .get();
+
+        if (!lastMessageSnapshot.empty) {
+          const messageDoc = lastMessageSnapshot.docs[0];
+          const messageData = messageDoc.data();
+          const senderDoc = await db.collection('users').doc(messageData.senderId).get();
+          const senderData = senderDoc.exists ? senderDoc.data() : null;
+
+          lastMessage = {
+            id: messageDoc.id,
+            text: messageData.text,
+            timestamp: messageData.timestamp,
+            sender: senderData ? {
+              id: messageData.senderId,
+              name: senderData.fullName || senderData.displayName,
+              fullName: senderData.fullName || senderData.displayName,
+              displayName: senderData.displayName || senderData.fullName
+            } : null
+          };
+        }
+      }
+
+      enrichedChats.push({
+        ...chat,
+        participants,
+        lastMessage
+      });
+    }
+
+    // Сортируем по последней активности
+    enrichedChats.sort((a, b) => {
+      const aTime = a.lastMessage?.timestamp || a.updatedAt || a.createdAt;
+      const bTime = b.lastMessage?.timestamp || b.updatedAt || b.createdAt;
+      return new Date(bTime) - new Date(aTime);
+    });
+
+    res.json(enrichedChats);
+  } catch (error) {
+    console.error('Get all chats error:', error);
     res.status(500).json({ message: 'Error fetching chats' });
   }
 });
@@ -543,61 +799,65 @@ router.post('/projects/:projectId/chats/:chatId/messages',
 );
 
 // Mark messages as read
-router.post('/projects/:projectId/chats/:chatId/read',
-  authenticate,
-  async (req, res) => {
-    try {
-      const { projectId, chatId } = req.params;
+router.post('/projects/:projectId/chats/:chatId/read', authenticate, async (req, res) => {
+  try {
+    const { projectId, chatId } = req.params;
 
-      // Check if user has access to chat
-      const chatDoc = await db.collection('projects')
-        .doc(projectId)
-        .collection('chats')
-        .doc(chatId)
-        .get();
+    // Check if user has access to chat
+    const chatDoc = await db.collection('projects')
+      .doc(projectId)
+      .collection('chats')
+      .doc(chatId)
+      .get();
 
-      if (!chatDoc.exists) {
-        return res.status(404).json({ message: 'Chat not found' });
-      }
+    if (!chatDoc.exists) {
+      return res.status(404).json({ message: 'Chat not found' });
+    }
 
-      const chat = chatDoc.data();
-      if (!chat.participants.includes(req.user.uid)) {
-        return res.status(403).json({ message: 'Not authorized to mark messages as read' });
-      }
+    const chat = chatDoc.data();
+    if (!chat.participants.includes(req.user.uid)) {
+      return res.status(403).json({ message: 'Not authorized to access chat' });
+    }
 
-      // Get unread messages
-      const unreadMessagesSnapshot = await db.collection('projects')
+    // Update all unread messages to mark them as read by this user
+    const messagesSnapshot = await db.collection('projects')
+      .doc(projectId)
+      .collection('chats')
+      .doc(chatId)
+      .collection('messages')
+      .where('readBy', 'not-in', [[req.user.uid]])
+      .get();
+
+    const batch = db.batch();
+    messagesSnapshot.docs.forEach(doc => {
+      const messageRef = db.collection('projects')
         .doc(projectId)
         .collection('chats')
         .doc(chatId)
         .collection('messages')
-        .where('readBy', 'array-contains', req.user.uid)
-        .get();
-
-      // Update read status for each message
-      const batch = db.batch();
-      unreadMessagesSnapshot.forEach(doc => {
-        batch.update(doc.ref, {
-          readBy: db.FieldValue.arrayUnion(req.user.uid)
+        .doc(doc.id);
+      
+      const currentReadBy = doc.data().readBy || [];
+      if (!currentReadBy.includes(req.user.uid)) {
+        batch.update(messageRef, {
+          readBy: [...currentReadBy, req.user.uid]
         });
-      });
+      }
+    });
 
-      await batch.commit();
+    await batch.commit();
 
-      res.json({ message: 'Messages marked as read' });
-    } catch (error) {
-      console.error('Mark messages as read error:', error);
-      res.status(500).json({ message: 'Error marking messages as read' });
-    }
+    res.json({ message: 'Messages marked as read' });
+  } catch (error) {
+    console.error('Mark messages as read error:', error);
+    res.status(500).json({ message: 'Error marking messages as read' });
   }
-);
+});
 
 // Add participant to chat
-router.post('/projects/:projectId/chats/:chatId/participants',
+router.post('/projects/:projectId/chats/:chatId/participants', 
   authenticate,
-  [
-    body('userId').notEmpty().trim()
-  ],
+  [body('userId').notEmpty()],
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -608,7 +868,25 @@ router.post('/projects/:projectId/chats/:chatId/participants',
       const { projectId, chatId } = req.params;
       const { userId } = req.body;
 
-      // Check if user has access to chat
+      // Check if user has access to project
+      const projectDoc = await db.collection('projects').doc(projectId).get();
+      if (!projectDoc.exists) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      const project = projectDoc.data();
+      const hasAccess = 
+        project.customerId === req.user.uid ||
+        project.pmId === req.user.uid ||
+        (project.team && project.team.includes(req.user.uid)) ||
+        req.user.roles.includes('presale') ||
+        req.user.roles.includes('super-admin');
+
+      if (!hasAccess) {
+        return res.status(403).json({ message: 'Not authorized to modify chat' });
+      }
+
+      // Check if chat exists
       const chatDoc = await db.collection('projects')
         .doc(projectId)
         .collection('chats')
@@ -620,14 +898,11 @@ router.post('/projects/:projectId/chats/:chatId/participants',
       }
 
       const chat = chatDoc.data();
-      if (!chat.participants.includes(req.user.uid)) {
-        return res.status(403).json({ message: 'Not authorized to add participants' });
-      }
-
-      // Check if user exists
+      
+      // Check if user to add exists
       const userDoc = await db.collection('users').doc(userId).get();
       if (!userDoc.exists) {
-        return res.status(404).json({ message: 'User not found' });
+        return res.status(400).json({ message: 'User not found' });
       }
 
       // Check if user is already a participant
@@ -635,34 +910,24 @@ router.post('/projects/:projectId/chats/:chatId/participants',
         return res.status(400).json({ message: 'User is already a participant' });
       }
 
-      // Add user to chat
+      // Add user to participants
       await db.collection('projects')
         .doc(projectId)
         .collection('chats')
         .doc(chatId)
         .update({
-          participants: db.FieldValue.arrayUnion(userId),
+          participants: [...chat.participants, userId],
           updatedAt: new Date()
         });
 
-      // Create activity log
-      await createChatActivityEntry(
-        projectId,
-        chatId,
-        req.user.uid,
-        'participant_added',
-        {
-          userId
-        }
-      );
-
-      // Create notification for new participant
+      // Create notification for added user
+      const userData = userDoc.data();
       await db.collection('users')
         .doc(userId)
         .collection('notifications')
         .add({
-          type: 'chat_invite',
-          title: 'Chat Invitation',
+          type: 'chat_added',
+          title: 'Added to Chat',
           message: `You have been added to chat: ${chat.name}`,
           projectId,
           chatId,
@@ -679,75 +944,65 @@ router.post('/projects/:projectId/chats/:chatId/participants',
 );
 
 // Remove participant from chat
-router.delete('/projects/:projectId/chats/:chatId/participants/:userId',
-  authenticate,
-  async (req, res) => {
-    try {
-      const { projectId, chatId, userId } = req.params;
+router.delete('/projects/:projectId/chats/:chatId/participants/:userId', authenticate, async (req, res) => {
+  try {
+    const { projectId, chatId, userId } = req.params;
 
-      // Check if user has access to chat
-      const chatDoc = await db.collection('projects')
-        .doc(projectId)
-        .collection('chats')
-        .doc(chatId)
-        .get();
-
-      if (!chatDoc.exists) {
-        return res.status(404).json({ message: 'Chat not found' });
-      }
-
-      const chat = chatDoc.data();
-      if (!chat.participants.includes(req.user.uid)) {
-        return res.status(403).json({ message: 'Not authorized to remove participants' });
-      }
-
-      // Check if user is a participant
-      if (!chat.participants.includes(userId)) {
-        return res.status(400).json({ message: 'User is not a participant' });
-      }
-
-      // Remove user from chat
-      await db.collection('projects')
-        .doc(projectId)
-        .collection('chats')
-        .doc(chatId)
-        .update({
-          participants: db.FieldValue.arrayRemove(userId),
-          updatedAt: new Date()
-        });
-
-      // Create activity log
-      await createChatActivityEntry(
-        projectId,
-        chatId,
-        req.user.uid,
-        'participant_removed',
-        {
-          userId
-        }
-      );
-
-      // Create notification for removed participant
-      await db.collection('users')
-        .doc(userId)
-        .collection('notifications')
-        .add({
-          type: 'chat_removal',
-          title: 'Removed from Chat',
-          message: `You have been removed from chat: ${chat.name}`,
-          projectId,
-          chatId,
-          createdAt: new Date(),
-          read: false
-        });
-
-      res.json({ message: 'Participant removed successfully' });
-    } catch (error) {
-      console.error('Remove participant error:', error);
-      res.status(500).json({ message: 'Error removing participant' });
+    // Check if user has access to project
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      return res.status(404).json({ message: 'Project not found' });
     }
+
+    const project = projectDoc.data();
+    const hasAccess = 
+      project.customerId === req.user.uid ||
+      project.pmId === req.user.uid ||
+      (project.team && project.team.includes(req.user.uid)) ||
+      req.user.roles.includes('presale') ||
+      req.user.roles.includes('super-admin') ||
+      req.user.uid === userId; // Users can remove themselves
+
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Not authorized to modify chat' });
+    }
+
+    // Check if chat exists
+    const chatDoc = await db.collection('projects')
+      .doc(projectId)
+      .collection('chats')
+      .doc(chatId)
+      .get();
+
+    if (!chatDoc.exists) {
+      return res.status(404).json({ message: 'Chat not found' });
+    }
+
+    const chat = chatDoc.data();
+    
+    // Check if user is a participant
+    if (!chat.participants.includes(userId)) {
+      return res.status(400).json({ message: 'User is not a participant' });
+    }
+
+    // Remove user from participants
+    const updatedParticipants = chat.participants.filter(id => id !== userId);
+    
+    await db.collection('projects')
+      .doc(projectId)
+      .collection('chats')
+      .doc(chatId)
+      .update({
+        participants: updatedParticipants,
+        updatedAt: new Date()
+      });
+
+    res.json({ message: 'Participant removed successfully' });
+  } catch (error) {
+    console.error('Remove participant error:', error);
+    res.status(500).json({ message: 'Error removing participant' });
   }
-);
+});
 
 // Get chat statistics
 router.get('/projects/:projectId/chats/:chatId/statistics', authenticate, async (req, res) => {
@@ -845,5 +1100,199 @@ router.get('/projects/:projectId/chats/:chatId/statistics', authenticate, async 
     res.status(500).json({ message: 'Error fetching chat statistics' });
   }
 });
+
+// Create global chat (for admins to create chats with anyone)
+router.post('/chats/global',
+  authenticate,
+  checkRole(['admin', 'super-admin']),
+  [
+    body('name').notEmpty().trim(),
+    body('type').isIn(['group', 'direct']),
+    body('participants').isArray().notEmpty()
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { name, type, participants } = req.body;
+
+      // Validate participants
+      for (const participantId of participants) {
+        const userDoc = await db.collection('users').doc(participantId).get();
+        if (!userDoc.exists) {
+          return res.status(400).json({ message: `User ${participantId} not found` });
+        }
+      }
+
+      // For direct chats, ensure only two participants
+      if (type === 'direct' && participants.length !== 2) {
+        return res.status(400).json({ message: 'Direct chats must have exactly two participants' });
+      }
+
+      // Add creator to participants if not already included
+      if (!participants.includes(req.user.uid)) {
+        participants.push(req.user.uid);
+      }
+
+      const chatData = {
+        name,
+        type,
+        participants,
+        createdBy: req.user.uid,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isGlobal: true
+      };
+
+      const chatRef = await db.collection('global-chats').add(chatData);
+
+      // Create notifications for participants
+      for (const participantId of participants) {
+        if (participantId !== req.user.uid) {
+          await db.collection('users')
+            .doc(participantId)
+            .collection('notifications')
+            .add({
+              type: 'chat_created',
+              title: 'New Chat Created',
+              message: `You have been added to chat: ${name}`,
+              chatId: chatRef.id,
+              isGlobal: true,
+              createdAt: new Date(),
+              read: false
+            });
+        }
+      }
+
+      res.status(201).json({
+        message: 'Global chat created successfully',
+        chatId: chatRef.id
+      });
+    } catch (error) {
+      console.error('Create global chat error:', error);
+      res.status(500).json({ message: 'Error creating global chat' });
+    }
+  }
+);
+
+// Get messages from global chat
+router.get('/chats/global/:chatId/messages', authenticate, async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { limit = 50, before } = req.query;
+
+    // Check if user has access to chat
+    const chatDoc = await db.collection('global-chats').doc(chatId).get();
+
+    if (!chatDoc.exists) {
+      return res.status(404).json({ message: 'Chat not found' });
+    }
+
+    const chat = chatDoc.data();
+    if (!chat.participants.includes(req.user.uid)) {
+      return res.status(403).json({ message: 'Not authorized to view chat messages' });
+    }
+
+    let query = db.collection('global-chats')
+      .doc(chatId)
+      .collection('messages')
+      .orderBy('timestamp', 'desc')
+      .limit(parseInt(limit));
+
+    if (before) {
+      query = query.startAfter(before);
+    }
+
+    const messagesSnapshot = await query.get();
+    const messages = [];
+
+    for (const doc of messagesSnapshot.docs) {
+      const message = doc.data();
+      const senderDoc = await db.collection('users').doc(message.senderId).get();
+      const senderData = senderDoc.exists ? senderDoc.data() : null;
+
+      messages.push({
+        id: doc.id,
+        ...message,
+        sender: senderData ? {
+          id: message.senderId,
+          name: senderData.fullName || senderData.displayName,
+          fullName: senderData.fullName || senderData.displayName,
+          displayName: senderData.displayName || senderData.fullName,
+          profileImage: senderData.profileImage
+        } : null
+      });
+    }
+
+    res.json(messages);
+  } catch (error) {
+    console.error('Get global chat messages error:', error);
+    res.status(500).json({ message: 'Error fetching messages' });
+  }
+});
+
+// Send message to global chat
+router.post('/chats/global/:chatId/messages',
+  authenticate,
+  [
+    body('text').notEmpty().trim(),
+    body('mentions').optional().isArray()
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { chatId } = req.params;
+      const { text, mentions = [] } = req.body;
+
+      // Check if user has access to chat
+      const chatDoc = await db.collection('global-chats').doc(chatId).get();
+
+      if (!chatDoc.exists) {
+        return res.status(404).json({ message: 'Chat not found' });
+      }
+
+      const chat = chatDoc.data();
+      if (!chat.participants.includes(req.user.uid)) {
+        return res.status(403).json({ message: 'Not authorized to send messages' });
+      }
+
+      const messageData = {
+        text,
+        mentions,
+        senderId: req.user.uid,
+        timestamp: new Date(),
+        readBy: [req.user.uid]
+      };
+
+      const messageRef = await db.collection('global-chats')
+        .doc(chatId)
+        .collection('messages')
+        .add(messageData);
+
+      // Update chat's last message timestamp
+      await db.collection('global-chats')
+        .doc(chatId)
+        .update({
+          lastMessageAt: new Date(),
+          updatedAt: new Date()
+        });
+
+      res.status(201).json({
+        message: 'Message sent successfully',
+        messageId: messageRef.id
+      });
+    } catch (error) {
+      console.error('Send global chat message error:', error);
+      res.status(500).json({ message: 'Error sending message' });
+    }
+  }
+);
 
 module.exports = router; 

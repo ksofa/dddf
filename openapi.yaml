@@ -1,19 +1,22 @@
-openapi: 3.0.0
+openapi: 3.1.0
 info:
   title: Taska Backend API
-  description: REST API для платформы Taska
+  description: API для системы управления проектами и задачами
   version: 1.0.0
   contact:
-    name: Taska Support
+    name: API Support
     email: support@taska.com
 
 servers:
   - url: http://localhost:3000
-    description: Local server
+    description: Development server
+
+security:
+  - BearerAuth: []
 
 components:
   securitySchemes:
-    bearerAuth:
+    BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
@@ -22,165 +25,48 @@ components:
     Error:
       type: object
       properties:
-        message:
+        error:
           type: string
-          description: Error message
-        errors:
-          type: array
-          items:
-            type: object
-            properties:
-              msg:
-                type: string
-              param:
-                type: string
-              location:
-                type: string
+        details:
+          type: string
 
-    Task:
+    ProjectRequest:
       type: object
+      required:
+        - companyName
+        - contactPerson
+        - email
+        - projectTitle
+        - projectDescription
       properties:
-        id:
+        companyName:
           type: string
-        text:
+          description: Название компании заказчика
+        contactPerson:
           type: string
-        column:
+          description: Контактное лицо
+        email:
           type: string
-        assignee:
+          format: email
+          description: Email для связи
+        phone:
           type: string
-          nullable: true
-        status:
+          description: Телефон для связи
+        projectTitle:
           type: string
-          enum: [todo, in_progress, done]
-        color:
+          description: Название проекта
+        projectDescription:
           type: string
-          nullable: true
-        dueDate:
+          description: Описание проекта
+        budget:
           type: string
-          format: date-time
-          nullable: true
-        createdAt:
+          description: Бюджет проекта
+        deadline:
           type: string
-          format: date-time
-        createdBy:
+          description: Желаемый срок выполнения
+        requirements:
           type: string
-        updatedAt:
-          type: string
-          format: date-time
-        updatedBy:
-          type: string
-        estimatedHours:
-          type: number
-          nullable: true
-        totalHoursSpent:
-          type: number
-          nullable: true
-
-    Column:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        order:
-          type: integer
-          minimum: 0
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-        updatedAt:
-          type: string
-          format: date-time
-          nullable: true
-        updatedBy:
-          type: string
-          nullable: true
-
-    Document:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-          nullable: true
-        type:
-          type: string
-          enum: [contract, specification, report, other]
-        fileType:
-          type: string
-        size:
-          type: integer
-        path:
-          type: string
-        uploadedBy:
-          type: string
-        uploadedAt:
-          type: string
-          format: date-time
-        uploader:
-          type: object
-          properties:
-            id:
-              type: string
-            fullName:
-              type: string
-            profileImage:
-              type: string
-              nullable: true
-
-    Category:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-        updatedAt:
-          type: string
-          format: date-time
-          nullable: true
-        updatedBy:
-          type: string
-          nullable: true
-
-    Project:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-          nullable: true
-        status:
-          type: string
-          enum: [active, completed, archived]
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-        updatedAt:
-          type: string
-          format: date-time
-        updatedBy:
-          type: string
-          nullable: true
+          description: Дополнительные требования
 
     User:
       type: object
@@ -189,184 +75,87 @@ components:
           type: string
         email:
           type: string
-        fullName:
+        displayName:
           type: string
-        role:
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [admin, teamlead, developer, designer, tester]
+        position:
           type: string
-          enum: [admin, pm, developer]
-        profileImage:
+        department:
           type: string
-          nullable: true
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-
-    Chat:
-      type: object
-      properties:
-        id:
-          type: string
-        projectId:
-          type: string
-        name:
-          type: string
-        type:
-          type: string
-          enum: [private, group]
-        createdAt:
-          type: string
-          format: date-time
-        createdBy:
-          type: string
-        updatedAt:
-          type: string
-          format: date-time
-        updatedBy:
-          type: string
-          nullable: true
-
-    Message:
-      type: object
-      properties:
-        id:
-          type: string
-        chatId:
-          type: string
-        text:
-          type: string
-        sender:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-        updatedBy:
-          type: string
-          nullable: true
-
-    Notification:
-      type: object
-      properties:
-        id:
-          type: string
-        userId:
-          type: string
-        type:
-          type: string
-          enum: [task_assigned, task_updated, message_received, project_invite]
-        message:
-          type: string
-        read:
+        isActive:
           type: boolean
-        createdAt:
-          type: string
-          format: date-time
 
-    Invite:
+    Project:
       type: object
       properties:
         id:
           type: string
-        projectId:
+        title:
           type: string
-        email:
+        description:
           type: string
-        role:
+        clientCompany:
           type: string
-          enum: [pm, developer]
+        clientContact:
+          type: string
+        clientEmail:
+          type: string
         status:
           type: string
-          enum: [pending, accepted, rejected]
+          enum: [active, completed, cancelled]
+        teamLead:
+          type: string
+        teamMembers:
+          type: array
+          items:
+            type: string
         createdAt:
           type: string
           format: date-time
-        createdBy:
-          type: string
-        updatedAt:
-          type: string
-          format: date-time
-        updatedBy:
-          type: string
-          nullable: true
 
 paths:
-  /api/auth/login:
-    post:
-      summary: Войти в систему
+  /api/health:
+    get:
+      summary: Проверка состояния API
       tags:
-        - Auth
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-                - password
-              properties:
-                email:
-                  type: string
-                password:
-                  type: string
+        - Health
+      security: []
       responses:
         '200':
-          description: Успешный вход
+          description: API работает
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  token:
+                  status:
                     type: string
-                  user:
-                    $ref: '#/components/schemas/User'
-        '401':
-          description: Неверные учетные данные
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+                  message:
+                    type: string
+                  timestamp:
+                    type: string
+                  version:
+                    type: string
 
-  /api/auth/register:
+  /api/projects/project-request:
     post:
-      summary: Зарегистрироваться
+      summary: Подача заявки на проект (без регистрации)
       tags:
-        - Auth
+        - Project Requests
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - email
-                - password
-                - fullName
-              properties:
-                email:
-                  type: string
-                password:
-                  type: string
-                fullName:
-                  type: string
+              $ref: '#/components/schemas/ProjectRequest'
       responses:
         '201':
-          description: Пользователь создан
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  userId:
-                    type: string
+          description: Заявка успешно отправлена
         '400':
           description: Ошибка валидации
           content:
@@ -374,13 +163,167 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/projects/project-requests:
+    get:
+      summary: Получить все заявки на проекты (только админы)
+      tags:
+        - Project Requests
+      responses:
+        '200':
+          description: Список заявок
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/ProjectRequest'
+                    - type: object
+                      properties:
+                        id:
+                          type: string
+                        status:
+                          type: string
+                          enum: [pending, approved, rejected]
+                        createdAt:
+                          type: string
+                          format: date-time
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/projects/project-requests/{requestId}/approve:
+    post:
+      summary: Одобрить заявку и создать проект (только админы)
+      tags:
+        - Project Requests
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                teamLeadId:
+                  type: string
+                  description: ID тимлида для назначения на проект
+      responses:
+        '200':
+          description: Заявка одобрена и проект создан
+        '404':
+          description: Заявка не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/projects/project-requests/{requestId}/reject:
+    post:
+      summary: Отклонить заявку (только админы)
+      tags:
+        - Project Requests
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Причина отклонения
+      responses:
+        '200':
+          description: Заявка отклонена
+        '404':
+          description: Заявка не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/projects/{projectId}/assign-teamlead:
+    post:
+      summary: Назначить тимлида на проект (только админы)
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - teamLeadId
+              properties:
+                teamLeadId:
+                  type: string
+      responses:
+        '200':
+          description: Тимлид назначен
+        '404':
+          description: Проект или тимлид не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/projects/{projectId}/add-member:
+    post:
+      summary: Добавить участника в команду проекта (тимлиды и админы)
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+      responses:
+        '200':
+          description: Участник добавлен в команду
+        '403':
+          description: Недостаточно прав
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/users:
     get:
-      summary: Получить список пользователей
+      summary: Получить всех пользователей (только админы)
       tags:
         - Users
-      security:
-        - bearerAuth: []
       responses:
         '200':
           description: Список пользователей
@@ -390,8 +333,104 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/User'
-        '401':
-          description: Неавторизован
+
+  /api/users/teamleads:
+    get:
+      summary: Получить всех тимлидов (только админы)
+      tags:
+        - Users
+      responses:
+        '200':
+          description: Список тимлидов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+  /api/users/{userId}/assign-role:
+    post:
+      summary: Назначить роль пользователю (только админы)
+      tags:
+        - Users
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - role
+              properties:
+                role:
+                  type: string
+                  enum: [admin, teamlead, developer, designer, tester]
+      responses:
+        '200':
+          description: Роль назначена
+        '400':
+          description: Недопустимая роль или пользователь уже имеет эту роль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/users/{userId}/remove-role:
+    post:
+      summary: Удалить роль у пользователя (только админы)
+      tags:
+        - Users
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - role
+              properties:
+                role:
+                  type: string
+                  enum: [admin, teamlead, developer, designer, tester]
+      responses:
+        '200':
+          description: Роль удалена
+        '400':
+          description: Пользователь не имеет этой роли
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/users/my-team:
+    get:
+      summary: Получить участников команды (только тимлиды)
+      tags:
+        - Users
+      responses:
+        '200':
+          description: Список участников команды
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '403':
+          description: Доступно только для тимлидов
           content:
             application/json:
               schema:
@@ -399,11 +438,9 @@ paths:
 
   /api/projects:
     get:
-      summary: Получить список проектов
+      summary: Получить проекты (с учетом ролей)
       tags:
         - Projects
-      security:
-        - bearerAuth: []
       responses:
         '200':
           description: Список проектов
@@ -413,19 +450,11 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Project'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
     post:
-      summary: Создать новый проект
+      summary: Создать проект (только админы)
       tags:
         - Projects
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -433,108 +462,51 @@ paths:
             schema:
               type: object
               required:
-                - name
+                - title
+                - description
               properties:
-                name:
+                title:
                   type: string
                 description:
                   type: string
+                clientCompany:
+                  type: string
+                clientContact:
+                  type: string
+                clientEmail:
+                  type: string
+                teamLead:
+                  type: string
+                teamMembers:
+                  type: array
+                  items:
+                    type: string
       responses:
         '201':
           description: Проект создан
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  projectId:
-                    type: string
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+                $ref: '#/components/schemas/Project'
 
-  /api/projects/{projectId}:
+  /api/projects/{id}:
     get:
-      summary: Получить информацию о проекте
+      summary: Получить проект по ID
       tags:
         - Projects
-      security:
-        - bearerAuth: []
       parameters:
-        - in: path
-          name: projectId
+        - name: id
+          in: path
+          required: true
           schema:
             type: string
-          description: ID проекта
       responses:
         '200':
-          description: Информация о проекте
+          description: Данные проекта
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Project'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Проект не найден
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/projects/{projectId}/tasks:
-    get:
-      summary: Получить список задач проекта
-      tags:
-        - Tasks
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: projectId
-          schema:
-            type: string
-          description: ID проекта
-        - in: query
-          name: column
-          schema:
-            type: string
-          description: Фильтр по колонке
-        - in: query
-          name: assignee
-          schema:
-            type: string
-          description: Фильтр по исполнителю
-        - in: query
-          name: status
-          schema:
-            type: string
-            enum: [todo, in_progress, done]
-          description: Фильтр по статусу
-      responses:
-        '200':
-          description: Список задач
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Task'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
         '403':
           description: Нет доступа к проекту
           content:
@@ -548,711 +520,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-    post:
-      summary: Создать новую задачу
+    put:
+      summary: Обновить проект (админы и тимлиды)
       tags:
-        - Tasks
-      security:
-        - bearerAuth: []
+        - Projects
       parameters:
-        - in: path
-          name: projectId
+        - name: id
+          in: path
+          required: true
           schema:
             type: string
-          description: ID проекта
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - text
-                - column
               properties:
-                text:
+                title:
                   type: string
-                column:
+                description:
                   type: string
-                assignee:
-                  type: string
-                  nullable: true
                 status:
                   type: string
-                  enum: [todo, in_progress, done]
-                color:
-                  type: string
-                  nullable: true
-                dueDate:
-                  type: string
-                  format: date-time
-                  nullable: true
-      responses:
-        '201':
-          description: Задача создана
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  taskId:
-                    type: string
-        '400':
-          description: Ошибка валидации
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Только PM может создавать задачи
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Проект не найден
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/projects/{projectId}/columns:
-    get:
-      summary: Получить список колонок проекта
-      tags:
-        - Columns
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: projectId
-          schema:
-            type: string
-          description: ID проекта
+                  enum: [active, completed, cancelled]
       responses:
         '200':
-          description: Список колонок
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Column'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          description: Проект обновлен
         '403':
-          description: Нет доступа к проекту
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Проект не найден
+          description: Недостаточно прав
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
-    post:
-      summary: Создать новую колонку
+    delete:
+      summary: Удалить проект (только админы)
       tags:
-        - Columns
-      security:
-        - bearerAuth: []
+        - Projects
       parameters:
-        - in: path
-          name: projectId
+        - name: id
+          in: path
+          required: true
           schema:
             type: string
-          description: ID проекта
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-              properties:
-                name:
-                  type: string
-                order:
-                  type: integer
-                  minimum: 0
-      responses:
-        '201':
-          description: Колонка создана
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  columnId:
-                    type: string
-        '400':
-          description: Ошибка валидации
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Только PM может создавать колонки
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Проект не найден
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/projects/{projectId}/documents:
-    get:
-      summary: Получить список документов проекта
-      tags:
-        - Documents
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: projectId
-          schema:
-            type: string
-          description: ID проекта
-        - in: query
-          name: type
-          schema:
-            type: string
-            enum: [contract, specification, report, other]
-          description: Фильтр по типу документа
-        - in: query
-          name: uploadedBy
-          schema:
-            type: string
-          description: Фильтр по загрузившему
-        - in: query
-          name: limit
-          schema:
-            type: integer
-          description: Лимит документов
-        - in: query
-          name: before
-          schema:
-            type: string
-          description: Курсор для пагинации
       responses:
         '200':
-          description: Список документов
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Document'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          description: Проект удален
         '403':
-          description: Нет доступа к проекту
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Проект не найден
+          description: Недостаточно прав
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
-    post:
-      summary: Загрузить документ
-      tags:
-        - Documents
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: projectId
-          schema:
-            type: string
-          description: ID проекта
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required:
-                - file
-                - name
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: Файл для загрузки (PDF, DOC, DOCX, XLS, XLSX, JPEG, PNG)
-                name:
-                  type: string
-                  description: Название документа
-                description:
-                  type: string
-                  description: Описание документа
-                type:
-                  type: string
-                  enum: [contract, specification, report, other]
-                  description: Тип документа
-      responses:
-        '201':
-          description: Документ загружен
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  documentId:
-                    type: string
-        '400':
-          description: Ошибка валидации или неверный тип файла
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Нет доступа к проекту
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Проект не найден
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/categories:
-    get:
-      summary: Получить список всех категорий
-      tags:
-        - Categories
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: Список категорий
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Category'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    post:
-      summary: Создать новую категорию
-      tags:
-        - Categories
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - name
-              properties:
-                name:
-                  type: string
-                  description: Название категории
-                description:
-                  type: string
-                  description: Описание категории
-      responses:
-        '201':
-          description: Категория создана
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  categoryId:
-                    type: string
-        '400':
-          description: Ошибка валидации или категория с таким названием уже существует
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Нет прав для создания категории
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/chats:
-    get:
-      summary: Получить список чатов
-      tags:
-        - Chats
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: projectId
-          schema:
-            type: string
-          description: Фильтр по проекту
-      responses:
-        '200':
-          description: Список чатов
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Chat'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    post:
-      summary: Создать новый чат
-      tags:
-        - Chats
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - projectId
-                - name
-                - type
-              properties:
-                projectId:
-                  type: string
-                name:
-                  type: string
-                type:
-                  type: string
-                  enum: [private, group]
-      responses:
-        '201':
-          description: Чат создан
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  chatId:
-                    type: string
-        '400':
-          description: Ошибка валидации
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Нет прав для создания чата
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/chats/{chatId}/messages:
-    get:
-      summary: Получить сообщения чата
-      tags:
-        - Messages
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: chatId
-          schema:
-            type: string
-          description: ID чата
-        - in: query
-          name: limit
-          schema:
-            type: integer
-          description: Лимит сообщений
-        - in: query
-          name: before
-          schema:
-            type: string
-          description: Курсор для пагинации
-      responses:
-        '200':
-          description: Список сообщений
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Message'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Нет доступа к чату
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Чат не найден
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    post:
-      summary: Отправить сообщение
-      tags:
-        - Messages
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: chatId
-          schema:
-            type: string
-          description: ID чата
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - text
-              properties:
-                text:
-                  type: string
-      responses:
-        '201':
-          description: Сообщение отправлено
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  messageId:
-                    type: string
-        '400':
-          description: Ошибка валидации
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Нет доступа к чату
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Чат не найден
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/notifications:
-    get:
-      summary: Получить список уведомлений
-      tags:
-        - Notifications
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: read
-          schema:
-            type: boolean
-          description: Фильтр по статусу прочтения
-        - in: query
-          name: limit
-          schema:
-            type: integer
-          description: Лимит уведомлений
-        - in: query
-          name: before
-          schema:
-            type: string
-          description: Курсор для пагинации
-      responses:
-        '200':
-          description: Список уведомлений
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Notification'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/invites:
-    get:
-      summary: Получить список приглашений
-      tags:
-        - Invites
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: status
-          schema:
-            type: string
-            enum: [pending, accepted, rejected]
-          description: Фильтр по статусу
-      responses:
-        '200':
-          description: Список приглашений
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Invite'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    post:
-      summary: Создать приглашение
-      tags:
-        - Invites
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - projectId
-                - email
-                - role
-              properties:
-                projectId:
-                  type: string
-                email:
-                  type: string
-                role:
-                  type: string
-                  enum: [pm, developer]
-      responses:
-        '201':
-          description: Приглашение создано
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  inviteId:
-                    type: string
-        '400':
-          description: Ошибка валидации
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Неавторизован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Нет прав для создания приглашений
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error' 
+tags:
+  - name: Health
+    description: Проверка состояния API
+  - name: Project Requests
+    description: Заявки на проекты от заказчиков
+  - name: Projects
+    description: Управление проектами
+  - name: Users
+    description: Управление пользователями и ролями 

@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .all-\[unset\] {
+    all: unset;
+  }
+}
+
+:root {
+  --h1-alternative-font-family: "Inter", Helvetica;
+  --h1-alternative-font-size: 28px;
+  --h1-alternative-font-style: normal;
+  --h1-alternative-font-weight: 500;
+  --h1-alternative-letter-spacing: 0px;
+  --h1-alternative-line-height: 28px;
+  --h2-font-family: "Inter", Helvetica;
+  --h2-font-size: 20px;
+  --h2-font-style: normal;
+  --h2-font-weight: 500;
+  --h2-letter-spacing: 0px;
+  --h2-line-height: 24px;
+  --left-menu-font-family: "Inter", Helvetica;
+  --left-menu-font-size: 14px;
+  --left-menu-font-style: normal;
+  --left-menu-font-weight: 500;
+  --left-menu-letter-spacing: 0px;
+  --left-menu-line-height: 20px;
+  --main-colorsaqua: rgba(41, 130, 253, 1);
+  --main-colorsaqua-20: rgba(212, 230, 255, 1);
+  --main-colorsbackground: rgba(248, 248, 250, 1);
+  --main-colorsbackground-alt: rgba(238, 241, 245, 1);
+  --main-colorsgreen: rgba(15, 177, 77, 1);
+  --main-colorsorange: rgba(221, 130, 39, 1);
+  --neutralneutral-10: rgba(51, 53, 57, 1);
+  --neutralneutral-100: rgba(255, 255, 255, 1);
+  --neutralneutral-20: rgba(74, 76, 80, 1);
+  --neutralneutral-40: rgba(119, 121, 124, 1);
+  --neutralneutral-5: rgba(41, 42, 47, 1);
+  --neutralneutral-60: rgba(165, 165, 167, 1);
+  --neutralneutral-80: rgba(210, 210, 211, 1);
+  --neutralneutral-85: rgba(222, 222, 223, 1);
+  --neutralneutral-90: rgba(236, 236, 236, 1);
+  --neutralneutral-95: rgba(244, 244, 244, 1);
+  --number-1-font-family: "Inter", Helvetica;
+  --number-1-font-size: 44px;
+  --number-1-font-style: normal;
+  --number-1-font-weight: 500;
+  --number-1-letter-spacing: 0px;
+  --number-1-line-height: 100%;
+  --paragraph-14-font-family: "Inter", Helvetica;
+  --paragraph-14-font-size: 14px;
+  --paragraph-14-font-style: normal;
+  --paragraph-14-font-weight: 400;
+  --paragraph-14-letter-spacing: 0px;
+  --paragraph-14-line-height: 16px;
+  --paragraph-14-medium-font-family: "Inter", Helvetica;
+  --paragraph-14-medium-font-size: 14px;
+  --paragraph-14-medium-font-style: normal;
+  --paragraph-14-medium-font-weight: 500;
+  --paragraph-14-medium-letter-spacing: 0px;
+  --paragraph-14-medium-line-height: 16px;
+  --paragraph-16-font-family: "Inter", Helvetica;
+  --paragraph-16-font-size: 16px;
+  --paragraph-16-font-style: normal;
+  --paragraph-16-font-weight: 400;
+  --paragraph-16-letter-spacing: 0px;
+  --paragraph-16-line-height: 20px;
+  --paragraph-16-medium-font-family: "Inter", Helvetica;
+  --paragraph-16-medium-font-size: 16px;
+  --paragraph-16-medium-font-style: normal;
+  --paragraph-16-medium-font-weight: 500;
+  --paragraph-16-medium-letter-spacing: 0px;
+  --paragraph-16-medium-line-height: 20px;
+  --status-font-family: "Inter", Helvetica;
+  --status-font-size: 14px;
+  --status-font-style: normal;
+  --status-font-weight: 500;
+  --status-letter-spacing: 0px;
+  --status-line-height: 16px;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+
+    --card: transparent;
+    --card-foreground: 222.2 47.4% 11.2%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 215 20.2% 65.1%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --popover: 224 71% 4%;
+    --popover-foreground: 215 20.2% 65.1%;
+
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+
+    --card: transparent;
+    --card-foreground: 213 31% 91%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 1.2%;
+
+    --secondary: 222.2 47.4% 11.2%;
+    --secondary-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 216 34% 17%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}

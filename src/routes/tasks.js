@@ -191,8 +191,11 @@ router.get('/projects/:projectId/tasks', authenticate, async (req, res) => {
 
     const project = projectDoc.data();
     const hasAccess = 
+      req.user.roles && req.user.roles.includes('admin') ||
+      project.manager === req.user.uid ||
       project.customerId === req.user.uid ||
       project.pmId === req.user.uid ||
+      (project.teamMembers && project.teamMembers.includes(req.user.uid)) ||
       (project.team && project.team.includes(req.user.uid)) ||
       req.user.roles.includes('presale') ||
       req.user.roles.includes('super-admin');
@@ -236,18 +239,22 @@ router.get('/projects/:projectId/tasks', authenticate, async (req, res) => {
     // Fetch assignee details
     const assignees = {};
     if (assigneeIds.size > 0) {
-      const assigneesSnapshot = await db.collection('users')
-        .where('id', 'in', Array.from(assigneeIds))
-        .get();
-
-      assigneesSnapshot.forEach(doc => {
-        const userData = doc.data();
-        assignees[doc.id] = {
-          id: doc.id,
-          fullName: userData.fullName,
-          profileImage: userData.profileImage
-        };
-      });
+      // Получаем пользователей по их ID документов
+      for (const assigneeId of assigneeIds) {
+        try {
+          const userDoc = await db.collection('users').doc(assigneeId).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data();
+            assignees[assigneeId] = {
+              id: assigneeId,
+              fullName: userData.fullName || userData.displayName,
+              profileImage: userData.profileImage
+            };
+          }
+        } catch (error) {
+          console.error(`Error fetching user ${assigneeId}:`, error);
+        }
+      }
     }
 
     // Add assignee details to tasks
@@ -266,7 +273,6 @@ router.get('/projects/:projectId/tasks', authenticate, async (req, res) => {
 // Create new task
 router.post('/projects/:projectId/tasks',
   authenticate,
-  checkRole(['pm']),
   [
     body('text').notEmpty().trim(),
     body('column').notEmpty(),
@@ -292,8 +298,17 @@ router.post('/projects/:projectId/tasks',
       }
 
       const project = projectDoc.data();
-      if (project.pmId !== req.user.uid) {
-        return res.status(403).json({ message: 'Only project PM can create tasks' });
+      
+      // Проверяем права доступа для создания задач
+      const canCreateTasks = 
+        req.user.roles && req.user.roles.includes('admin') ||
+        project.pmId === req.user.uid ||
+        project.teamLead === req.user.uid ||
+        project.manager === req.user.uid ||
+        req.user.roles && req.user.roles.includes('pm');
+      
+      if (!canCreateTasks) {
+        return res.status(403).json({ message: 'Not authorized to create tasks in this project' });
       }
 
       // Check if column exists
@@ -611,7 +626,6 @@ router.delete('/projects/:projectId/tasks/:taskId',
 // Create new column
 router.post('/projects/:projectId/columns',
   authenticate,
-  checkRole(['pm']),
   [
     body('name').notEmpty().trim(),
     body('order').isInt({ min: 0 })
@@ -625,6 +639,24 @@ router.post('/projects/:projectId/columns',
 
       const { projectId } = req.params;
       const { name, order } = req.body;
+
+      // Проверяем права доступа к проекту
+      const projectDoc = await db.collection('projects').doc(projectId).get();
+      if (!projectDoc.exists) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      const project = projectDoc.data();
+      const canCreateColumns = 
+        req.user.roles && req.user.roles.includes('admin') ||
+        project.pmId === req.user.uid ||
+        project.teamLead === req.user.uid ||
+        project.manager === req.user.uid ||
+        req.user.roles && req.user.roles.includes('pm');
+      
+      if (!canCreateColumns) {
+        return res.status(403).json({ message: 'Not authorized to create columns in this project' });
+      }
 
       const columnData = {
         name,

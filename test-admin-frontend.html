@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест доступа админа к заявкам</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .result {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Тест доступа админа к заявкам</h1>
+        
+        <div>
+            <h3>1. Авторизация админа</h3>
+            <input type="email" id="email" placeholder="Email админа" value="ad@mail.ru">
+            <input type="password" id="password" placeholder="Пароль" value="123456">
+            <button class="button" onclick="login()">Войти как админ</button>
+        </div>
+
+        <div>
+            <h3>2. Тестирование API</h3>
+            <button class="button" onclick="testApplications()">Получить заявки</button>
+            <button class="button" onclick="testUsers()">Получить пользователей</button>
+            <button class="button" onclick="testProjects()">Получить проекты</button>
+        </div>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let authToken = null;
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+
+            try {
+                resultDiv.innerHTML = '<p>🔄 Авторизация...</p>';
+
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h3>✅ Успешная авторизация!</h3>
+                            <p><strong>Имя:</strong> ${data.user.fullName || data.user.displayName}</p>
+                            <p><strong>Email:</strong> ${data.user.email}</p>
+                            <p><strong>Роли:</strong> ${data.user.roles.join(', ')}</p>
+                            <p><strong>Токен:</strong> ${authToken.substring(0, 20)}...</p>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${data.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        async function testApplications() {
+            if (!authToken) {
+                document.getElementById('result').innerHTML = '<div class="error">❌ Сначала авторизуйтесь</div>';
+                return;
+            }
+
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                resultDiv.innerHTML = '<p>🔄 Получение заявок...</p>';
+
+                const response = await fetch(`${API_BASE}/applications`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const applications = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h3>✅ Заявки успешно получены!</h3>
+                            <p><strong>Количество:</strong> ${applications.length}</p>
+                        </div>
+                        <div class="result">
+                            ${JSON.stringify(applications.slice(0, 3), null, 2)}
+                        </div>
+                    `;
+                } else {
+                    const error = await response.text();
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка ${response.status}: ${error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        async function testUsers() {
+            if (!authToken) {
+                document.getElementById('result').innerHTML = '<div class="error">❌ Сначала авторизуйтесь</div>';
+                return;
+            }
+
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                resultDiv.innerHTML = '<p>🔄 Получение пользователей...</p>';
+
+                const response = await fetch(`${API_BASE}/users`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const users = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h3>✅ Пользователи успешно получены!</h3>
+                            <p><strong>Количество:</strong> ${users.length}</p>
+                        </div>
+                        <div class="result">
+                            ${JSON.stringify(users.slice(0, 3), null, 2)}
+                        </div>
+                    `;
+                } else {
+                    const error = await response.text();
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка ${response.status}: ${error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        async function testProjects() {
+            if (!authToken) {
+                document.getElementById('result').innerHTML = '<div class="error">❌ Сначала авторизуйтесь</div>';
+                return;
+            }
+
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                resultDiv.innerHTML = '<p>🔄 Получение проектов...</p>';
+
+                const response = await fetch(`${API_BASE}/projects`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    const projects = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h3>✅ Проекты успешно получены!</h3>
+                            <p><strong>Количество:</strong> ${projects.length}</p>
+                        </div>
+                        <div class="result">
+                            ${JSON.stringify(projects.slice(0, 2), null, 2)}
+                        </div>
+                    `;
+                } else {
+                    const error = await response.text();
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка ${response.status}: ${error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+
+        // Проверяем, есть ли сохраненный токен
+        window.onload = function() {
+            const savedToken = localStorage.getItem('authToken');
+            if (savedToken) {
+                authToken = savedToken;
+                document.getElementById('result').innerHTML = '<div class="success">✅ Найден сохраненный токен авторизации</div>';
+            }
+        };
+    </script>
+</body>
+</html> 

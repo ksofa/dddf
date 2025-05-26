@@ -1,0 +1,1 @@
+export { HeaderByAnima } from "./HeaderByAnima";

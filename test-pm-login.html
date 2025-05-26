@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест авторизации PM</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .success {
+            color: green;
+            margin-top: 10px;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .projects, .chats {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .project-item, .chat-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        .status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.active { background: #d4edda; color: #155724; }
+        .status.planning { background: #fff3cd; color: #856404; }
+        .status.completed { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Тест авторизации PM пользователя</h1>
+        
+        <div class="info">
+            <h3>📋 Данные для входа:</h3>
+            <p><strong>Email:</strong> pm@mail.ru</p>
+            <p><strong>Пароль:</strong> 123456</p>
+            <p><strong>Роль:</strong> Project Manager (PM)</p>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" value="pm@mail.ru">
+        </div>
+
+        <div class="form-group">
+            <label for="password">Пароль:</label>
+            <input type="password" id="password" value="123456">
+        </div>
+
+        <button onclick="login()">🚀 Войти</button>
+        <button onclick="loadProjects()">📁 Загрузить проекты</button>
+        <button onclick="loadChats()">💬 Загрузить чаты</button>
+        <button onclick="openApp()">🌐 Открыть приложение</button>
+
+        <div id="result"></div>
+        <div id="projects" class="projects" style="display: none;"></div>
+        <div id="chats" class="chats" style="display: none;"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let authToken = null;
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+
+            try {
+                resultDiv.innerHTML = '<p>🔄 Авторизация...</p>';
+
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h3>✅ Успешная авторизация!</h3>
+                            <p><strong>Имя:</strong> ${data.user.fullName || data.user.displayName}</p>
+                            <p><strong>Email:</strong> ${data.user.email}</p>
+                            <p><strong>Роли:</strong> ${data.user.roles.join(', ')}</p>
+                            <p><strong>Токен:</strong> ${authToken.substring(0, 20)}...</p>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">❌ Ошибка: ${data.message}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        async function loadProjects() {
+            if (!authToken) {
+                alert('Сначала авторизуйтесь!');
+                return;
+            }
+
+            const projectsDiv = document.getElementById('projects');
+            
+            try {
+                projectsDiv.innerHTML = '<p>🔄 Загрузка проектов...</p>';
+                projectsDiv.style.display = 'block';
+
+                const response = await fetch(`${API_BASE}/projects`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const projects = await response.json();
+
+                if (response.ok) {
+                    projectsDiv.innerHTML = `
+                        <h3>📁 Проекты PM (${projects.length})</h3>
+                        ${projects.map(project => `
+                            <div class="project-item">
+                                <h4>${project.title}</h4>
+                                <p>${project.description}</p>
+                                <p><span class="status ${project.status}">${project.status}</span> 
+                                   Бюджет: ${project.budget?.toLocaleString()} ₽</p>
+                                <p><strong>Технологии:</strong> ${project.technologies?.join(', ')}</p>
+                                <p><strong>Команда:</strong> ${project.teamMembers?.length || 0} участников</p>
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    projectsDiv.innerHTML = `<div class="error">❌ Ошибка загрузки проектов: ${projects.message}</div>`;
+                }
+            } catch (error) {
+                projectsDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        async function loadChats() {
+            if (!authToken) {
+                alert('Сначала авторизуйтесь!');
+                return;
+            }
+
+            const chatsDiv = document.getElementById('chats');
+            
+            try {
+                chatsDiv.innerHTML = '<p>🔄 Загрузка чатов...</p>';
+                chatsDiv.style.display = 'block';
+
+                const response = await fetch(`${API_BASE}/chats`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const chats = await response.json();
+
+                if (response.ok) {
+                    chatsDiv.innerHTML = `
+                        <h3>💬 Чаты PM (${chats.length})</h3>
+                        ${chats.map(chat => `
+                            <div class="chat-item">
+                                <h4>${chat.name}</h4>
+                                <p><strong>Тип:</strong> ${chat.type === 'group' ? 'Групповой' : 'Личный'}</p>
+                                <p><strong>Участники:</strong> ${chat.participants?.length || 0}</p>
+                                ${chat.projectTitle ? `<p><strong>Проект:</strong> ${chat.projectTitle}</p>` : ''}
+                                ${chat.isGlobal ? '<p><strong>Глобальный чат</strong></p>' : ''}
+                                ${chat.lastMessage ? `<p><strong>Последнее сообщение:</strong> ${chat.lastMessage.text}</p>` : ''}
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    chatsDiv.innerHTML = `<div class="error">❌ Ошибка загрузки чатов: ${chats.message}</div>`;
+                }
+            } catch (error) {
+                chatsDiv.innerHTML = `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+            }
+        }
+
+        function openApp() {
+            if (!authToken) {
+                alert('Сначала авторизуйтесь!');
+                return;
+            }
+            
+            // Открываем приложение в новой вкладке
+            window.open('http://localhost:5173', '_blank');
+        }
+
+        // Автоматическая авторизация при загрузке страницы
+        window.onload = function() {
+            const savedToken = localStorage.getItem('authToken');
+            if (savedToken) {
+                authToken = savedToken;
+                document.getElementById('result').innerHTML = `
+                    <div class="success">
+                        <p>✅ Найден сохраненный токен авторизации</p>
+                        <p>Можете сразу загружать данные или открыть приложение</p>
+                    </div>
+                `;
+            }
+        };
+    </script>
+</body>
+</html> 

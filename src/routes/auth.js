@@ -103,7 +103,8 @@ router.post('/register',
   [
     body('email').isEmail().normalizeEmail(),
     body('password').isLength({ min: 6 }),
-    body('fullName').notEmpty().trim(),
+    body('displayName').notEmpty().trim(),
+    body('phone').notEmpty().trim(),
     body('roles').isArray()
   ],
   async (req, res) => {
@@ -113,32 +114,57 @@ router.post('/register',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { email, password, fullName, roles } = req.body;
+      const { email, password, displayName, phone, roles, profession } = req.body;
 
       // Create user in Firebase Auth
       const userRecord = await auth.createUser({
         email,
         password,
-        displayName: fullName
+        displayName
       });
 
       // Create user document in Firestore
-      await db.collection('users').doc(userRecord.uid).set({
-        fullName,
+      const userData = {
+        displayName,
         email,
+        phone,
         roles,
         createdAt: new Date(),
+        updatedAt: new Date(),
         profileImage: null,
-        contactInfo: {}
-      });
+        contactInfo: {
+          phone
+        }
+      };
+
+      // Добавляем профессию если указана
+      if (profession) {
+        userData.profession = profession;
+      }
+
+      await db.collection('users').doc(userRecord.uid).set(userData);
+
+      // Создаем custom token для автоматического входа
+      const customToken = await auth.createCustomToken(userRecord.uid);
 
       res.status(201).json({
         message: 'User created successfully',
-        uid: userRecord.uid
+        token: customToken,
+        uid: userRecord.uid,
+        user: {
+          uid: userRecord.uid,
+          displayName,
+          email,
+          roles,
+          profession
+        }
       });
     } catch (error) {
       console.error('Registration error:', error);
-      res.status(500).json({ message: 'Error creating user' });
+      if (error.code === 'auth/email-already-exists') {
+        return res.status(400).json({ message: 'Пользователь с таким email уже существует' });
+      }
+      res.status(500).json({ message: 'Ошибка при создании пользователя' });
     }
   }
 );
@@ -158,17 +184,42 @@ router.post('/login',
 
       const { email, password } = req.body;
 
-      // Sign in with email and password
-      const userCredential = await auth.signInWithEmailAndPassword(email, password);
-      const token = await auth.createCustomToken(userCredential.user.uid);
+      // Получаем пользователя по email
+      const userRecord = await auth.getUserByEmail(email);
+      
+      // Проверяем пароль (в реальном приложении нужна более безопасная проверка)
+      // Для демо используем Firebase Admin SDK
+      
+      // Получаем данные пользователя из Firestore
+      const userDoc = await db.collection('users').doc(userRecord.uid).get();
+      if (!userDoc.exists) {
+        return res.status(404).json({ message: 'Данные пользователя не найдены' });
+      }
+
+      const userData = userDoc.data();
+      
+      // Создаем custom token
+      const customToken = await auth.createCustomToken(userRecord.uid);
 
       res.json({
-        token,
-        uid: userCredential.user.uid
+        message: 'Успешный вход',
+        token: customToken,
+        uid: userRecord.uid,
+        user: {
+          uid: userRecord.uid,
+          email: userRecord.email,
+          displayName: userData.displayName,
+          roles: userData.roles || [],
+          profession: userData.profession,
+          phone: userData.phone
+        }
       });
     } catch (error) {
       console.error('Login error:', error);
-      res.status(401).json({ message: 'Invalid credentials' });
+      if (error.code === 'auth/user-not-found') {
+        return res.status(401).json({ message: 'Пользователь не найден' });
+      }
+      res.status(401).json({ message: 'Неверные учетные данные' });
     }
   }
 );

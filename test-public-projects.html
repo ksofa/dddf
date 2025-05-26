@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Public Projects API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .project {
+            border: 1px solid #ddd;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .project h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .project p {
+            margin: 5px 0;
+            color: #666;
+        }
+        .status {
+            background: #e3f2fd;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        button {
+            background: #5B7FC7;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #4070C4;
+        }
+        #loading {
+            text-align: center;
+            color: #666;
+        }
+        #error {
+            color: red;
+            background: #ffebee;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Public Projects API</h1>
+    <p>This page tests the public projects endpoint without authentication.</p>
+    
+    <div>
+        <button onclick="loadProjects()">Load All Projects</button>
+        <button onclick="loadProjects(5)">Load 5 Projects</button>
+        <button onclick="clearResults()">Clear</button>
+    </div>
+    
+    <div id="loading" style="display: none;">Loading projects...</div>
+    <div id="error" style="display: none;"></div>
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        
+        async function loadProjects(limit) {
+            const loadingEl = document.getElementById('loading');
+            const errorEl = document.getElementById('error');
+            const resultsEl = document.getElementById('results');
+            
+            // Show loading
+            loadingEl.style.display = 'block';
+            errorEl.style.display = 'none';
+            resultsEl.innerHTML = '';
+            
+            try {
+                const url = limit ? `${API_BASE}/public/projects?limit=${limit}` : `${API_BASE}/public/projects`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const projects = await response.json();
+                
+                // Hide loading
+                loadingEl.style.display = 'none';
+                
+                if (projects.length === 0) {
+                    resultsEl.innerHTML = '<p>No projects found.</p>';
+                    return;
+                }
+                
+                // Display projects
+                resultsEl.innerHTML = `
+                    <h2>Projects (${projects.length})</h2>
+                    ${projects.map(project => `
+                        <div class="project">
+                            <h3>${project.title}</h3>
+                            <p><strong>Description:</strong> ${project.description}</p>
+                            <p><strong>Client:</strong> ${project.client || project.customerId}</p>
+                            <p><strong>Status:</strong> <span class="status">${Array.isArray(project.status) ? project.status.join(', ') : project.status}</span></p>
+                            <p><strong>Created:</strong> ${new Date(project.createdAt._seconds * 1000).toLocaleDateString()}</p>
+                            ${project.teamLeadInfo ? `<p><strong>Team Lead:</strong> ${project.teamLeadInfo.displayName}</p>` : ''}
+                            <p><strong>Team Size:</strong> ${project.team ? project.team.length : 0} members</p>
+                        </div>
+                    `).join('')}
+                `;
+                
+            } catch (error) {
+                console.error('Error loading projects:', error);
+                loadingEl.style.display = 'none';
+                errorEl.style.display = 'block';
+                errorEl.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('error').style.display = 'none';
+        }
+        
+        // Load projects on page load
+        window.onload = () => loadProjects(10);
+    </script>
+</body>
+</html> 
