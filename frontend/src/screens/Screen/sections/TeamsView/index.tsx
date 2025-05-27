@@ -60,6 +60,11 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
 
+  // Проверяем роль пользователя
+  const isPM = user?.roles?.includes('pm') || false;
+  const isAdmin = user?.roles?.includes('admin') || false;
+  const canManageTeams = isPM || isAdmin;
+
   useEffect(() => {
     fetchTeams();
   }, []);
@@ -282,19 +287,23 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
               <h1 className="text-2xl font-bold text-gray-900">{selectedTeam.name}</h1>
             </div>
             <div className="flex items-center gap-3">
-              <Button 
-                variant="outline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowAddMemberModal(true);
-                }}
-                className="flex items-center gap-2"
-              >
-                ➕ Пригласить в команду
-              </Button>
-              <Button variant="ghost" className="text-gray-600">
-                🗑️ Удалить участников
-              </Button>
+              {canManageTeams && (
+                <>
+                  <Button 
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowAddMemberModal(true);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    ➕ Пригласить в команду
+                  </Button>
+                  <Button variant="ghost" className="text-gray-600">
+                    🗑️ Удалить участников
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
@@ -421,15 +430,17 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Команды</h1>
           <div className="flex items-center gap-3">
-            <Button 
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Создать команду
-            </Button>
+            {canManageTeams && (
+              <Button 
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Создать команду
+              </Button>
+            )}
             <Button variant="ghost">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -522,12 +533,14 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
 
                   {/* Кнопки действий */}
                   <div className="pt-2 border-t border-gray-100 flex gap-2">
-                    <button
-                      onClick={(e) => handleInviteClick(e, team)}
-                      className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors flex items-center gap-1 flex-1 justify-center font-medium"
-                    >
-                      ➕ ПРИГЛАСИТЬ
-                    </button>
+                    {canManageTeams && (
+                      <button
+                        onClick={(e) => handleInviteClick(e, team)}
+                        className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors flex items-center gap-1 flex-1 justify-center font-medium"
+                      >
+                        ➕ ПРИГЛАСИТЬ
+                      </button>
+                    )}
                   </div>
                 </div>
               </Card>

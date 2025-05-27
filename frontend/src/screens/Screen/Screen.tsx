@@ -34,6 +34,7 @@ export const Screen = (): JSX.Element => {
   const [currentScreen, setCurrentScreen] = React.useState<ScreenType>("START");
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
 
   console.log('Current screen:', currentScreen);
   console.log('Active view:', activeView);
@@ -97,6 +98,19 @@ export const Screen = (): JSX.Element => {
     setSelectedTeamId(null);
   };
 
+  const toggleMobileSidebar = () => {
+    setIsMobileSidebarOpen(!isMobileSidebarOpen);
+  };
+
+  const closeMobileSidebar = () => {
+    setIsMobileSidebarOpen(false);
+  };
+
+  const handleMobileViewChange = (view: string) => {
+    setActiveView(view);
+    closeMobileSidebar();
+  };
+
   const renderView = () => {
     console.log('Rendering view:', activeView);
     switch (activeView) {
@@ -145,14 +159,89 @@ export const Screen = (): JSX.Element => {
   }
 
   console.log('Rendering DASHBOARD screen');
+
+  // Мобильные пункты меню
+  const mobileMenuItems = [
+    { id: 'dashboard', label: 'Главная', icon: '🏠' },
+    { id: 'projects', label: 'Проекты', icon: '📋' },
+    { id: 'teams', label: 'Команды', icon: '👥' },
+    { id: 'chats', label: 'Чаты', icon: '💬' },
+    { id: 'applications', label: 'Заявки', icon: '📝' },
+  ];
+
+  // Десктопная версия
   return (
     <div className="flex h-screen w-full bg-main-colorsbackground-alt overflow-hidden">
-      <LeftMenuByAnima onViewChange={setActiveView} activeView={activeView} onLogout={handleLogout} />
-      <div className="flex flex-col flex-1 overflow-hidden">
-        <HeaderByAnima onLogout={handleLogout} />
-        <main className="flex-1 overflow-auto">
+      {/* Десктопное левое меню */}
+      <div className="mobile-hidden">
+        <LeftMenuByAnima 
+          onViewChange={setActiveView} 
+          activeView={activeView} 
+          onLogout={handleLogout} 
+        />
+      </div>
+
+      {/* Мобильная боковая панель */}
+      <div className={`mobile-sidebar-overlay ${isMobileSidebarOpen ? 'open' : ''}`} onClick={closeMobileSidebar}></div>
+      <div className={`mobile-sidebar ${isMobileSidebarOpen ? 'open' : ''}`}>
+        <div className="mobile-sidebar-header">
+          <h3 className="text-lg font-semibold">Меню</h3>
+          <button className="mobile-sidebar-close" onClick={closeMobileSidebar}>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="mobile-sidebar-content">
+          {mobileMenuItems.map((item) => (
+            <div
+              key={item.id}
+              className={`mobile-sidebar-item ${activeView === item.id ? 'active' : ''}`}
+              onClick={() => handleMobileViewChange(item.id)}
+            >
+              <span className="mobile-sidebar-item-icon">{item.icon}</span>
+              <span>{item.label}</span>
+            </div>
+          ))}
+          <div className="mobile-sidebar-item" onClick={handleLogout}>
+            <span className="mobile-sidebar-item-icon">🚪</span>
+            <span>Выход</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Основной контент */}
+      <div className="flex flex-col flex-1 overflow-hidden main-content">
+        {/* Заголовок */}
+        <div className="header">
+          {/* Кнопка мобильного меню */}
+          <button className="mobile-header-menu" onClick={toggleMobileSidebar}>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          
+          <HeaderByAnima onLogout={handleLogout} />
+        </div>
+
+        {/* Основной контент */}
+        <main className="flex-1 overflow-auto p-responsive">
           {renderView()}
         </main>
+      </div>
+
+      {/* Мобильное нижнее меню */}
+      <div className="mobile-menu">
+        {mobileMenuItems.map((item) => (
+          <div
+            key={item.id}
+            className={`mobile-menu-item ${activeView === item.id ? 'active' : ''}`}
+            onClick={() => setActiveView(item.id)}
+          >
+            <div className="mobile-menu-icon">{item.icon}</div>
+            <div className="mobile-menu-label">{item.label}</div>
+          </div>
+        ))}
       </div>
     </div>
   );

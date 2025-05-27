@@ -1,0 +1,871 @@
+/* Мобильная адаптация - Глобальные стили */
+
+/* Базовые переменные для мобильной версии */
+:root {
+  --mobile-padding: 16px;
+  --mobile-margin: 12px;
+  --mobile-border-radius: 12px;
+  --mobile-header-height: 60px;
+  --mobile-bottom-nav-height: 70px;
+  --mobile-safe-area-top: env(safe-area-inset-top);
+  --mobile-safe-area-bottom: env(safe-area-inset-bottom);
+  
+  /* Цветовая схема */
+  --primary-color: #3B82F6;
+  --primary-dark: #1E40AF;
+  --secondary-color: #F3F4F6;
+  --success-color: #10B981;
+  --warning-color: #F59E0B;
+  --error-color: #EF4444;
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --border-color: #E5E7EB;
+  --background-color: #FFFFFF;
+  --surface-color: #F9FAFB;
+  
+  /* Тени */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Базовые мобильные стили */
+@media (max-width: 768px) {
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    background-color: var(--surface-color);
+    overflow-x: hidden;
+  }
+  
+  /* Контейнеры */
+  .mobile-container {
+    width: 100%;
+    min-height: 100vh;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .mobile-content {
+    flex: 1;
+    padding: var(--mobile-padding);
+    padding-top: calc(var(--mobile-header-height) + var(--mobile-padding));
+    padding-bottom: calc(var(--mobile-bottom-nav-height) + var(--mobile-padding));
+    overflow-y: auto;
+  }
+  
+  /* Заголовки */
+  .mobile-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--mobile-header-height);
+    background: var(--background-color);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--mobile-padding);
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    background-color: rgba(255, 255, 255, 0.95);
+  }
+  
+  .mobile-header-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+  }
+  
+  .mobile-header-back {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+  }
+  
+  .mobile-header-back:hover {
+    background-color: var(--secondary-color);
+  }
+  
+  /* Карточки */
+  .mobile-card {
+    background: var(--background-color);
+    border-radius: var(--mobile-border-radius);
+    padding: var(--mobile-padding);
+    margin-bottom: var(--mobile-margin);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+  }
+  
+  .mobile-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  
+  .mobile-card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+  }
+  
+  .mobile-card-subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 4px 0 0 0;
+  }
+  
+  /* Кнопки */
+  .mobile-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 48px;
+    text-decoration: none;
+  }
+  
+  .mobile-btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+  }
+  
+  .mobile-btn-primary:hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  
+  .mobile-btn-secondary {
+    background-color: var(--secondary-color);
+    color: var(--text-primary);
+  }
+  
+  .mobile-btn-secondary:hover {
+    background-color: #E5E7EB;
+  }
+  
+  .mobile-btn-success {
+    background-color: var(--success-color);
+    color: white;
+  }
+  
+  .mobile-btn-warning {
+    background-color: var(--warning-color);
+    color: white;
+  }
+  
+  .mobile-btn-error {
+    background-color: var(--error-color);
+    color: white;
+  }
+  
+  .mobile-btn-full {
+    width: 100%;
+  }
+  
+  .mobile-btn-small {
+    padding: 8px 16px;
+    font-size: 14px;
+    min-height: 36px;
+  }
+  
+  /* Формы */
+  .mobile-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .mobile-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .mobile-form-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  
+  .mobile-form-input {
+    padding: 12px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    font-size: 16px;
+    background-color: var(--background-color);
+    transition: border-color 0.2s;
+    min-height: 48px;
+  }
+  
+  .mobile-form-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+  
+  .mobile-form-textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+  
+  /* Списки */
+  .mobile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .mobile-list-item {
+    background: var(--background-color);
+    border-radius: 10px;
+    padding: 16px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+  }
+  
+  .mobile-list-item:active {
+    transform: scale(0.98);
+    background-color: var(--secondary-color);
+  }
+  
+  /* Навигация */
+  .mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--mobile-bottom-nav-height);
+    background: var(--background-color);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(10px);
+    background-color: rgba(255, 255, 255, 0.95);
+  }
+  
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+    min-width: 60px;
+  }
+  
+  .mobile-nav-item.active {
+    color: var(--primary-color);
+  }
+  
+  .mobile-nav-icon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 4px;
+  }
+  
+  .mobile-nav-label {
+    font-size: 12px;
+    font-weight: 500;
+  }
+  
+  /* Модальные окна */
+  .mobile-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 2000;
+    padding: 0;
+  }
+  
+  .mobile-modal-content {
+    background: var(--background-color);
+    border-radius: 20px 20px 0 0;
+    padding: 24px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  
+  /* Статусы и бейджи */
+  .mobile-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  
+  .mobile-badge-success {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: var(--success-color);
+  }
+  
+  .mobile-badge-warning {
+    background-color: rgba(245, 158, 11, 0.1);
+    color: var(--warning-color);
+  }
+  
+  .mobile-badge-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: var(--error-color);
+  }
+  
+  .mobile-badge-primary {
+    background-color: rgba(59, 130, 246, 0.1);
+    color: var(--primary-color);
+  }
+  
+  /* Загрузка */
+  .mobile-loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+  }
+  
+  .mobile-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border-color);
+    border-top: 3px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Утилиты */
+  .mobile-text-center {
+    text-align: center;
+  }
+  
+  .mobile-text-left {
+    text-align: left;
+  }
+  
+  .mobile-text-right {
+    text-align: right;
+  }
+  
+  .mobile-flex {
+    display: flex;
+  }
+  
+  .mobile-flex-col {
+    flex-direction: column;
+  }
+  
+  .mobile-flex-row {
+    flex-direction: row;
+  }
+  
+  .mobile-justify-between {
+    justify-content: space-between;
+  }
+  
+  .mobile-justify-center {
+    justify-content: center;
+  }
+  
+  .mobile-items-center {
+    align-items: center;
+  }
+  
+  .mobile-gap-2 {
+    gap: 8px;
+  }
+  
+  .mobile-gap-4 {
+    gap: 16px;
+  }
+  
+  .mobile-mt-4 {
+    margin-top: 16px;
+  }
+  
+  .mobile-mb-4 {
+    margin-bottom: 16px;
+  }
+  
+  .mobile-hidden {
+    display: none;
+  }
+  
+  /* Скрытие десктопных элементов на мобильных */
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* Показываем мобильные элементы только на мобильных */
+@media (min-width: 769px) {
+  .mobile-only {
+    display: none !important;
+  }
+}
+
+/* Адаптивные стили для мобильных устройств */
+
+/* Переменные */
+:root {
+  --mobile-breakpoint: 768px;
+  --tablet-breakpoint: 1024px;
+  
+  /* Размеры */
+  --mobile-header-height: 60px;
+  --mobile-nav-height: 70px;
+  --mobile-padding: 16px;
+  --mobile-margin: 8px;
+  --mobile-touch-target: 44px;
+  
+  /* Цвета */
+  --mobile-primary: #2982FD;
+  --mobile-background: #F6F7F9;
+  --mobile-card-bg: #FFFFFF;
+  --mobile-border: #ECECEC;
+  --mobile-text: #222222;
+  --mobile-text-secondary: #A5A5A7;
+  --mobile-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Базовые мобильные стили */
+@media (max-width: 768px) {
+  /* Основной контейнер */
+  .main-container,
+  .flex.h-screen {
+    flex-direction: column !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+  }
+  
+  /* Скрываем левое меню на мобильных */
+  .mobile-hidden {
+    display: none !important;
+  }
+  
+  /* Показываем мобильные элементы */
+  .mobile-only {
+    display: block !important;
+  }
+  
+  .mobile-flex {
+    display: flex !important;
+  }
+  
+  /* Основной контент */
+  .main-content {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+  
+  /* Заголовок */
+  .header {
+    height: var(--mobile-header-height) !important;
+    padding: 0 var(--mobile-padding) !important;
+    border-bottom: 1px solid var(--mobile-border) !important;
+    background: var(--mobile-card-bg) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    position: relative !important;
+    z-index: 100 !important;
+  }
+  
+  /* Основной контент с отступами */
+  .p-responsive,
+  main {
+    padding: var(--mobile-padding) !important;
+    flex: 1 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: calc(var(--mobile-nav-height) + var(--mobile-padding)) !important;
+  }
+  
+  /* Карточки */
+  .card,
+  .project-card,
+  .team-card,
+  .bg-white {
+    margin: var(--mobile-margin) 0 !important;
+    padding: var(--mobile-padding) !important;
+    border-radius: 12px !important;
+    box-shadow: var(--mobile-shadow) !important;
+    border: 1px solid var(--mobile-border) !important;
+  }
+  
+  /* Кнопки */
+  .btn,
+  button {
+    min-height: var(--mobile-touch-target) !important;
+    padding: 12px 16px !important;
+    font-size: 16px !important;
+    border-radius: 8px !important;
+    font-weight: 500 !important;
+  }
+  
+  /* Формы */
+  .form-control,
+  input,
+  textarea,
+  select {
+    min-height: var(--mobile-touch-target) !important;
+    font-size: 16px !important;
+    padding: 12px !important;
+    border-radius: 8px !important;
+    border: 1px solid var(--mobile-border) !important;
+  }
+  
+  /* Таблицы - делаем скроллируемыми */
+  .table-container,
+  .overflow-x-auto {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  table {
+    min-width: 600px !important;
+  }
+  
+  /* Модальные окна */
+  .modal {
+    margin: 0 !important;
+    max-height: 100vh !important;
+  }
+  
+  .modal-content {
+    margin: 0 !important;
+    border-radius: 0 !important;
+    max-height: 100vh !important;
+    overflow-y: auto !important;
+  }
+  
+  /* Скрам доска */
+  .scrum-board,
+  .flex.gap-4 {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 20px !important;
+  }
+  
+  .scrum-column {
+    min-width: 280px !important;
+    flex-shrink: 0 !important;
+  }
+  
+  /* Проекты и команды */
+  .projects-grid,
+  .teams-grid,
+  .grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  
+  /* Чаты */
+  .chat-container {
+    height: calc(100vh - var(--mobile-header-height) - var(--mobile-nav-height)) !important;
+  }
+  
+  /* Навигация */
+  .nav-tabs {
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  .nav-tabs .nav-item {
+    flex-shrink: 0 !important;
+  }
+  
+  /* Типографика */
+  h1 {
+    font-size: 24px !important;
+    line-height: 1.2 !important;
+  }
+  
+  h2 {
+    font-size: 20px !important;
+    line-height: 1.3 !important;
+  }
+  
+  h3 {
+    font-size: 18px !important;
+    line-height: 1.4 !important;
+  }
+  
+  /* Утилиты */
+  .full-width-mobile {
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  .stack-mobile {
+    flex-direction: column !important;
+  }
+  
+  .stack-mobile > * {
+    width: 100% !important;
+    margin-bottom: 16px !important;
+  }
+  
+  .stack-mobile > *:last-child {
+    margin-bottom: 0 !important;
+  }
+  
+  /* Скрытие элементов */
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* Мобильное меню */
+.mobile-menu {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--mobile-nav-height);
+  background: var(--mobile-card-bg);
+  border-top: 1px solid var(--mobile-border);
+  display: none;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(10px);
+  background-color: rgba(255, 255, 255, 0.95);
+}
+
+@media (max-width: 768px) {
+  .mobile-menu {
+    display: flex !important;
+  }
+}
+
+.mobile-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-decoration: none;
+  color: var(--mobile-text-secondary);
+  transition: color 0.2s;
+  min-width: 60px;
+  cursor: pointer;
+}
+
+.mobile-menu-item.active {
+  color: var(--mobile-primary);
+}
+
+.mobile-menu-item:hover {
+  color: var(--mobile-primary);
+}
+
+.mobile-menu-icon {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 4px;
+}
+
+.mobile-menu-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Мобильный заголовок с меню */
+.mobile-header-menu {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-header-menu {
+    display: block !important;
+  }
+}
+
+.mobile-header-menu:hover {
+  background-color: var(--mobile-background);
+}
+
+/* Боковое меню для мобильных */
+.mobile-sidebar {
+  position: fixed;
+  top: 0;
+  left: -300px;
+  width: 300px;
+  height: 100vh;
+  background: var(--mobile-card-bg);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  transition: left 0.3s ease;
+  z-index: 2000;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-sidebar.open {
+  left: 0;
+}
+
+.mobile-sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.mobile-sidebar-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.mobile-sidebar-header {
+  padding: var(--mobile-padding);
+  border-bottom: 1px solid var(--mobile-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mobile-sidebar-close {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.mobile-sidebar-close:hover {
+  background-color: var(--mobile-background);
+}
+
+.mobile-sidebar-content {
+  padding: var(--mobile-padding);
+}
+
+.mobile-sidebar-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  margin: 4px 0;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--mobile-text);
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+
+.mobile-sidebar-item:hover,
+.mobile-sidebar-item.active {
+  background-color: var(--mobile-background);
+  color: var(--mobile-primary);
+}
+
+.mobile-sidebar-item-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 12px;
+}
+
+/* Планшетные стили */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .main-content {
+    padding: 24px !important;
+  }
+  
+  .projects-grid,
+  .teams-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Скроллбары */
+@media (max-width: 768px) {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Анимации */
+@media (max-width: 768px) {
+  .mobile-transition {
+    transition: all 0.3s ease !important;
+  }
+  
+  .mobile-slide-up {
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .mobile-slide-up.active {
+    transform: translateY(0);
+  }
+} 

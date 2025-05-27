@@ -312,9 +312,24 @@ router.post('/projects/:projectId/tasks',
         project.pmId === req.user.uid ||
         project.teamLead === req.user.uid ||
         project.manager === req.user.uid ||
-        req.user.roles && req.user.roles.includes('pm');
+        (req.user.roles && req.user.roles.includes('pm') && (
+          project.pmId === req.user.uid ||
+          project.teamLead === req.user.uid ||
+          project.manager === req.user.uid
+        ));
+      
+      console.log('🔍 Task creation permission check:', {
+        userId: req.user.uid,
+        userRoles: req.user.roles,
+        projectId: projectId,
+        projectPmId: project.pmId,
+        projectTeamLead: project.teamLead,
+        projectManager: project.manager,
+        canCreateTasks: canCreateTasks
+      });
       
       if (!canCreateTasks) {
+        console.log('❌ Task creation denied for user:', req.user.uid);
         return res.status(403).json({ message: 'Not authorized to create tasks in this project' });
       }
 

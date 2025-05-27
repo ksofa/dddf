@@ -183,8 +183,20 @@ export const getChatStats = async (
   }
 };
 
-// Получить всех пользователей (для создания чатов)
-export async function getAllUsers(): Promise<User[]> {
-  const response = await api.get('/users');
+// Получить участников проекта (для создания чатов)
+export async function getProjectMembers(projectId: string): Promise<User[]> {
+  const response = await api.get(`/projects/${projectId}/members`);
   return response.data;
+}
+
+// Получить всех пользователей (для создания чатов) - только для админов
+export async function getAllUsers(): Promise<User[]> {
+  try {
+    const response = await api.get('/users');
+    return response.data;
+  } catch (error) {
+    // Если нет доступа к /users, возвращаем пустой массив
+    console.warn('No access to all users, using project members instead');
+    return [];
+  }
 } 

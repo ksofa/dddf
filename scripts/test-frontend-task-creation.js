@@ -1,137 +1,95 @@
 const axios = require('axios');
 
+const API_BASE_URL = 'http://localhost:3000/api';
+
 async function testFrontendTaskCreation() {
   try {
-    console.log('🔐 Авторизация PM пользователя...');
-    
-    // Авторизация PM
-    const loginResponse = await axios.post('http://localhost:3000/api/login', {
-      email: 'pm@test.test',
-      password: 'password123'
+    console.log('🧪 Тестирование создания задач через фронтенд API...\n');
+
+    // 1. Авторизация PM
+    console.log('🔐 Авторизация PM...');
+    const loginResponse = await axios.post(`${API_BASE_URL}/auth/login`, {
+      email: 'pm@mail.ru',
+      password: '123456'
     });
 
     const token = loginResponse.data.token;
-    console.log('✅ PM авторизован');
+    const pmUser = loginResponse.data.user;
+    console.log('✅ PM авторизован:', pmUser.email);
 
-    // Получаем список проектов PM
-    console.log('📋 Получение проектов PM...');
-    const projectsResponse = await axios.get('http://localhost:3000/api/projects', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
 
+    // 2. Получение проектов PM
+    const projectsResponse = await axios.get(`${API_BASE_URL}/projects`, { headers });
     const projects = projectsResponse.data;
-    console.log(`📊 Найдено проектов: ${projects.length}`);
-
+    
     if (projects.length === 0) {
-      console.log('❌ У PM нет проектов для тестирования');
+      console.log('❌ У PM нет проектов');
       return;
     }
 
-    const project = projects[0];
-    console.log(`🎯 Используем проект: ${project.title} (${project.id})`);
+    const testProject = projects[0];
+    console.log(`📋 Тестовый проект: ${testProject.title} (ID: ${testProject.id})`);
 
-    // Получаем скрам доску проекта
-    console.log('📋 Загрузка скрам доски...');
-    const boardResponse = await axios.get(`http://localhost:3000/api/projects/${project.id}/tasks`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    const tasks = boardResponse.data;
-    console.log(`📊 Задач на доске: ${tasks.length}`);
-
-    // Группируем задачи по статусам
-    const tasksByStatus = tasks.reduce((acc, task) => {
-      const status = task.status || 'todo';
-      if (!acc[status]) acc[status] = [];
-      acc[status].push(task);
-      return acc;
-    }, {});
-
-    console.log('📊 Распределение задач по колонкам:');
-    Object.entries(tasksByStatus).forEach(([status, tasks]) => {
-      console.log(`  ${status}: ${tasks.length} задач`);
-    });
-
-    // Создаем новую задачу через фронтенд API
-    console.log('➕ Создание новой задачи через фронтенд API...');
-    const newTaskData = {
-      text: 'Новая задача через фронтенд API',
-      description: 'Описание задачи созданной через фронтенд API',
-      column: 'todo',
+    // 3. Тестирование создания задачи как на фронтенде
+    console.log('\n📝 Создание задачи через фронтенд API...');
+    
+    const taskData = {
+      text: 'Тестовая задача от PM через фронтенд',
+      column: 'Нужно сделать',
       status: 'todo',
-      priority: 'high',
+      priority: 'medium',
       color: '#3B82F6',
-      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      description: 'Описание задачи созданной через фронтенд API'
     };
 
-    const createTaskResponse = await axios.post(
-      `http://localhost:3000/api/projects/${project.id}/tasks`,
-      newTaskData,
-      {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    console.log('✅ Задача успешно создана через фронтенд API!');
-    console.log('📝 ID задачи:', createTaskResponse.data.taskId);
-
-    // Проверяем обновленную доску
-    console.log('🔍 Проверка обновленной доски...');
-    const updatedBoardResponse = await axios.get(`http://localhost:3000/api/projects/${project.id}/tasks`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-
-    const updatedTasks = updatedBoardResponse.data;
-    console.log(`📊 Задач после создания: ${updatedTasks.length}`);
-
-    // Найдем созданную задачу
-    const createdTask = updatedTasks.find(task => task.id === createTaskResponse.data.taskId);
-    if (createdTask) {
-      console.log('✅ Созданная задача найдена на доске');
-      console.log('📋 Данные задачи:', {
-        id: createdTask.id,
-        text: createdTask.text,
-        status: createdTask.status,
-        priority: createdTask.priority,
-        color: createdTask.color
-      });
-    } else {
-      console.log('❌ Созданная задача не найдена на доске');
-    }
-
-    // Тестируем получение участников команды для назначения
-    console.log('👥 Получение участников команды...');
     try {
-      const teamResponse = await axios.get(`http://localhost:3000/api/users`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      
-      const users = teamResponse.data;
-      console.log(`👥 Доступных пользователей: ${users.length}`);
-      
-      if (users.length > 0) {
-        console.log('👤 Первые 3 пользователя:');
-        users.slice(0, 3).forEach(user => {
-          console.log(`  - ${user.displayName || user.name} (${user.email})`);
-        });
-      }
-    } catch (error) {
-      console.log('⚠️ Ошибка получения пользователей:', error.response?.data?.message || error.message);
-    }
+      const createTaskResponse = await axios.post(
+        `${API_BASE_URL}/projects/${testProject.id}/tasks`,
+        taskData,
+        { headers }
+      );
 
-    console.log('\n🎉 Тест фронтенд API для создания задач завершен успешно!');
-    console.log('✅ PM может создавать задачи в скрам доске');
-    console.log('✅ Задачи корректно отображаются на доске');
-    console.log('✅ API работает правильно');
+      console.log('✅ Задача создана через фронтенд API:', createTaskResponse.data);
+      
+      // 4. Проверяем, что задача появилась на скрам доске
+      console.log('\n📊 Проверка скрам доски...');
+      const boardResponse = await axios.get(`${API_BASE_URL}/projects/${testProject.id}/board`, { headers });
+      const boardData = boardResponse.data;
+      
+      if (boardData.board) {
+        const columns = Object.keys(boardData.board);
+        let totalTasks = 0;
+        
+        columns.forEach(column => {
+          const tasks = boardData.board[column];
+          totalTasks += tasks?.length || 0;
+          if (tasks && tasks.length > 0) {
+            console.log(`   - ${column}: ${tasks.length} задач`);
+            // Показываем последнюю созданную задачу
+            const lastTask = tasks[tasks.length - 1];
+            if (lastTask.text === taskData.text) {
+              console.log(`     ✅ Найдена наша задача: "${lastTask.text}"`);
+            }
+          }
+        });
+        
+        console.log(`📈 Всего задач на доске: ${totalTasks}`);
+      }
+
+      console.log('\n🎉 Тест создания задач через фронтенд API успешен!');
+      console.log('💡 PM теперь может создавать задачи на скрам доске!');
+
+    } catch (taskError) {
+      console.log('❌ Ошибка создания задачи:', taskError.response?.data?.message || taskError.message);
+      console.log('   Детали ошибки:', taskError.response?.data);
+    }
 
   } catch (error) {
-    console.error('❌ Ошибка при тестировании:', error.response?.data || error.message);
-    if (error.response) {
-      console.log('HTTP статус:', error.response.status);
-    }
+    console.error('❌ Общая ошибка тестирования:', error.message);
   }
 }
 

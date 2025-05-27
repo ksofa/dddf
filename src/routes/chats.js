@@ -617,6 +617,11 @@ router.post('/projects/:projectId/chats',
         return res.status(400).json({ message: 'Direct chats must have exactly two participants' });
       }
 
+      // Добавляем создателя в список участников, если его там нет
+      if (!participants.includes(req.user.uid)) {
+        participants.push(req.user.uid);
+      }
+
       const chatData = {
         name,
         type,
@@ -662,9 +667,37 @@ router.post('/projects/:projectId/chats',
         }
       }
 
+      // Получаем полные данные созданного чата
+      const createdChatDoc = await db.collection('projects')
+        .doc(projectId)
+        .collection('chats')
+        .doc(chatRef.id)
+        .get();
+
+      const createdChatData = { id: chatRef.id, ...createdChatDoc.data() };
+
+      // Получаем данные участников
+      const participantsData = [];
+      for (const participantId of participants) {
+        const userDoc = await db.collection('users').doc(participantId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          participantsData.push({
+            id: participantId,
+            name: userData.fullName || userData.displayName,
+            fullName: userData.fullName || userData.displayName,
+            displayName: userData.displayName || userData.fullName,
+            profileImage: userData.profileImage
+          });
+        }
+      }
+
+      createdChatData.participants = participantsData;
+
       res.status(201).json({
         message: 'Chat created successfully',
-        chatId: chatRef.id
+        chatId: chatRef.id,
+        chat: createdChatData
       });
     } catch (error) {
       console.error('Create chat error:', error);
@@ -719,8 +752,10 @@ router.get('/projects/:projectId/chats/:chatId/messages', authenticate, async (r
         id: doc.id,
         ...message,
         sender: senderData ? {
-          id: senderData.uid,
-          fullName: senderData.fullName,
+          id: message.senderId,
+          name: senderData.fullName || senderData.displayName,
+          fullName: senderData.fullName || senderData.displayName,
+          displayName: senderData.displayName || senderData.fullName,
           profileImage: senderData.profileImage
         } : null
       });

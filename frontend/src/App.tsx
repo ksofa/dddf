@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import '../tailwind.css';
+import './styles/mobile.css';
 import { Screen } from './screens/Screen/Screen';
 
 function App() {

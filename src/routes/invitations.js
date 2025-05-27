@@ -134,27 +134,75 @@ router.post('/team-invitations/:invitationId/respond', authenticate, async (req,
       const projectRef = db.collection('projects').doc(invitation.projectId);
       const teamRef = db.collection('teams').doc(invitation.projectId);
 
-      batch.update(projectRef, {
-        [`members.${userId}`]: {
+      // Получаем данные проекта
+      const projectDoc = await projectRef.get();
+      if (projectDoc.exists) {
+        const projectData = projectDoc.data();
+        const currentMembers = projectData.members || {};
+        const currentTeamMembers = projectData.teamMembers || [];
+
+        // Добавляем пользователя в members объект
+        currentMembers[userId] = {
           uid: userId,
           email: invitation.userEmail,
           displayName: invitation.userName,
           roles: req.user.roles || [],
           joinedAt: admin.firestore.FieldValue.serverTimestamp()
-        },
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+        };
 
-      batch.update(teamRef, {
-        [`members.${userId}`]: {
+        // Добавляем пользователя в teamMembers массив, если его там нет
+        if (!currentTeamMembers.includes(userId)) {
+          currentTeamMembers.push(userId);
+        }
+
+        batch.update(projectRef, {
+          members: currentMembers,
+          teamMembers: currentTeamMembers,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      // Проверяем существование команды и создаем/обновляем
+      const teamDoc = await teamRef.get();
+      if (teamDoc.exists) {
+        // Команда существует - обновляем
+        const teamData = teamDoc.data();
+        const currentTeamMembers = teamData.members || {};
+
+        currentTeamMembers[userId] = {
           uid: userId,
           email: invitation.userEmail,
           name: invitation.userName,
           roles: req.user.roles || [],
           joinedAt: admin.firestore.FieldValue.serverTimestamp()
-        },
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+        };
+
+        batch.update(teamRef, {
+          members: currentTeamMembers,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        // Команда не существует - создаем новую
+        const newTeam = {
+          id: invitation.projectId,
+          projectId: invitation.projectId,
+          name: `Команда проекта ${invitation.projectName}`,
+          description: `Команда для работы над проектом "${invitation.projectName}"`,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          members: {
+            [userId]: {
+              uid: userId,
+              email: invitation.userEmail,
+              name: invitation.userName,
+              roles: req.user.roles || [],
+              joinedAt: admin.firestore.FieldValue.serverTimestamp()
+            }
+          }
+        };
+
+        batch.set(teamRef, newTeam);
+      }
     }
 
     await batch.commit();
@@ -410,6 +458,248 @@ router.get('/my-applications', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Error getting my applications:', error);
     res.status(500).json({ error: 'Ошибка при получении ваших заявок' });
+  }
+});
+
+// ============= ОБЩИЙ РОУТ ДЛЯ ВСЕХ ПРИГЛАШЕНИЙ =============
+
+// Получить все приглашения для пользователя (универсальный роут)
+router.get('/invitations', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const status = req.query.status || 'pending';
+    const allInvitations = [];
+
+    // Получаем team invitations (приглашения в команду)
+    if (req.user.roles.includes('executor') || req.user.roles.includes('pm')) {
+      const teamInvitationsSnapshot = await db.collection('team_invitations')
+        .where('userId', '==', userId)
+        .where('status', '==', status)
+        .get();
+
+      teamInvitationsSnapshot.forEach(doc => {
+        allInvitations.push({
+          id: doc.id,
+          type: 'team_invitation',
+          ...doc.data()
+        });
+      });
+    }
+
+    // Получаем client applications (заявки клиентов) - только для клиентов
+    if (req.user.roles.includes('client')) {
+      const clientApplicationsSnapshot = await db.collection('client_applications')
+        .where('clientId', '==', userId)
+        .where('status', '==', status)
+        .get();
+
+      clientApplicationsSnapshot.forEach(doc => {
+        allInvitations.push({
+          id: doc.id,
+          type: 'client_application',
+          ...doc.data()
+        });
+      });
+    }
+
+    // Сортируем по времени создания
+    allInvitations.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || a.createdAt || new Date(0);
+      const bTime = b.createdAt?.toDate?.() || b.createdAt || new Date(0);
+      return bTime - aTime;
+    });
+
+    res.json(allInvitations);
+  } catch (error) {
+    console.error('Error getting all invitations:', error);
+    res.status(500).json({ error: 'Ошибка при получении приглашений' });
+  }
+});
+
+// Принять приглашение (универсальный роут)
+router.post('/invitations/:invitationId/accept', authenticate, async (req, res) => {
+  try {
+    const { invitationId } = req.params;
+    const userId = req.user.uid;
+
+    // Сначала ищем в team_invitations
+    let invitationDoc = await db.collection('team_invitations').doc(invitationId).get();
+    let collection = 'team_invitations';
+    let type = 'team_invitation';
+
+    // Если не найдено, ищем в client_applications
+    if (!invitationDoc.exists) {
+      invitationDoc = await db.collection('client_applications').doc(invitationId).get();
+      collection = 'client_applications';
+      type = 'client_application';
+    }
+
+    if (!invitationDoc.exists) {
+      return res.status(404).json({ error: 'Приглашение не найдено' });
+    }
+
+    const invitation = invitationDoc.data();
+
+    // Проверяем права доступа
+    if (type === 'team_invitation' && invitation.userId !== userId) {
+      return res.status(403).json({ error: 'Нет доступа к этому приглашению' });
+    }
+    if (type === 'client_application' && invitation.clientId !== userId) {
+      return res.status(403).json({ error: 'Нет доступа к этой заявке' });
+    }
+
+    if (invitation.status !== 'pending') {
+      return res.status(400).json({ error: 'Приглашение уже обработано' });
+    }
+
+    // Обновляем статус
+    await db.collection(collection).doc(invitationId).update({
+      status: 'accepted',
+      respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    // Для team_invitation добавляем пользователя в команду
+    if (type === 'team_invitation') {
+      const batch = db.batch();
+      const projectRef = db.collection('projects').doc(invitation.projectId);
+      const teamRef = db.collection('teams').doc(invitation.projectId);
+
+      // Получаем данные проекта
+      const projectDoc = await projectRef.get();
+      if (projectDoc.exists) {
+        const projectData = projectDoc.data();
+        const currentMembers = projectData.members || {};
+        const currentTeamMembers = projectData.teamMembers || [];
+
+        // Добавляем пользователя в members объект
+        currentMembers[userId] = {
+          uid: userId,
+          email: invitation.userEmail,
+          displayName: invitation.userName,
+          roles: req.user.roles || [],
+          joinedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        // Добавляем пользователя в teamMembers массив, если его там нет
+        if (!currentTeamMembers.includes(userId)) {
+          currentTeamMembers.push(userId);
+        }
+
+        batch.update(projectRef, {
+          members: currentMembers,
+          teamMembers: currentTeamMembers,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      // Проверяем существование команды и создаем/обновляем
+      const teamDoc = await teamRef.get();
+      if (teamDoc.exists) {
+        // Команда существует - обновляем
+        const teamData = teamDoc.data();
+        const currentTeamMembers = teamData.members || {};
+
+        currentTeamMembers[userId] = {
+          uid: userId,
+          email: invitation.userEmail,
+          name: invitation.userName,
+          roles: req.user.roles || [],
+          joinedAt: admin.firestore.FieldValue.serverTimestamp()
+        };
+
+        batch.update(teamRef, {
+          members: currentTeamMembers,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      } else {
+        // Команда не существует - создаем новую
+        const newTeam = {
+          id: invitation.projectId,
+          projectId: invitation.projectId,
+          name: `Команда проекта ${invitation.projectName}`,
+          description: `Команда для работы над проектом "${invitation.projectName}"`,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          members: {
+            [userId]: {
+              uid: userId,
+              email: invitation.userEmail,
+              name: invitation.userName,
+              roles: req.user.roles || [],
+              joinedAt: admin.firestore.FieldValue.serverTimestamp()
+            }
+          }
+        };
+
+        batch.set(teamRef, newTeam);
+      }
+
+      await batch.commit();
+    }
+
+    res.json({ 
+      message: type === 'team_invitation' 
+        ? 'Приглашение принято. Вы добавлены в команду проекта!' 
+        : 'Заявка принята',
+      status: 'accepted' 
+    });
+  } catch (error) {
+    console.error('Error accepting invitation:', error);
+    res.status(500).json({ error: 'Ошибка при принятии приглашения' });
+  }
+});
+
+// Отклонить приглашение (универсальный роут)
+router.post('/invitations/:invitationId/decline', authenticate, async (req, res) => {
+  try {
+    const { invitationId } = req.params;
+    const userId = req.user.uid;
+
+    // Сначала ищем в team_invitations
+    let invitationDoc = await db.collection('team_invitations').doc(invitationId).get();
+    let collection = 'team_invitations';
+    let type = 'team_invitation';
+
+    // Если не найдено, ищем в client_applications
+    if (!invitationDoc.exists) {
+      invitationDoc = await db.collection('client_applications').doc(invitationId).get();
+      collection = 'client_applications';
+      type = 'client_application';
+    }
+
+    if (!invitationDoc.exists) {
+      return res.status(404).json({ error: 'Приглашение не найдено' });
+    }
+
+    const invitation = invitationDoc.data();
+
+    // Проверяем права доступа
+    if (type === 'team_invitation' && invitation.userId !== userId) {
+      return res.status(403).json({ error: 'Нет доступа к этому приглашению' });
+    }
+    if (type === 'client_application' && invitation.clientId !== userId) {
+      return res.status(403).json({ error: 'Нет доступа к этой заявке' });
+    }
+
+    if (invitation.status !== 'pending') {
+      return res.status(400).json({ error: 'Приглашение уже обработано' });
+    }
+
+    // Обновляем статус
+    await db.collection(collection).doc(invitationId).update({
+      status: 'rejected',
+      respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    res.json({ 
+      message: 'Приглашение отклонено',
+      status: 'rejected' 
+    });
+  } catch (error) {
+    console.error('Error declining invitation:', error);
+    res.status(500).json({ error: 'Ошибка при отклонении приглашения' });
   }
 });
 

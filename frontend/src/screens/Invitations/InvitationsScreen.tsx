@@ -26,7 +26,7 @@ export const InvitationsScreen: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        const response = await apiClient.get('/my-invitations');
+        const response = await apiClient.get('/invitations?status=pending');
         setInvitations(response.data);
       } catch (error: any) {
         console.error('Error fetching invitations:', error);
@@ -137,13 +137,41 @@ export const InvitationsScreen: React.FC = () => {
                     </p>
                   )}
                   <p className="text-xs text-gray-500">
-                    Получено: {new Date(invitation.createdAt.toDate()).toLocaleDateString('ru-RU', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    Получено: {(() => {
+                      try {
+                        // Проверяем разные форматы даты
+                        if (invitation.createdAt?.toDate) {
+                          return invitation.createdAt.toDate().toLocaleDateString('ru-RU', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          });
+                        } else if (invitation.createdAt?.seconds) {
+                          return new Date(invitation.createdAt.seconds * 1000).toLocaleDateString('ru-RU', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          });
+                        } else if (invitation.createdAt) {
+                          return new Date(invitation.createdAt).toLocaleDateString('ru-RU', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          });
+                        } else {
+                          return 'Дата не указана';
+                        }
+                      } catch (error) {
+                        console.warn('Error formatting date:', error);
+                        return 'Дата не указана';
+                      }
+                    })()}
                   </p>
                 </div>
                 

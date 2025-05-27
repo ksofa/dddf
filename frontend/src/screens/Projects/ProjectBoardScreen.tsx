@@ -81,6 +81,16 @@ type TaskComment = {
 
 export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
   const { user } = useAuth();
+  
+  // Отладочная информация о пользователе
+  console.log('🔍 ProjectBoardScreen - User data:', {
+    user,
+    uid: user?.uid,
+    roles: user?.roles,
+    hasUser: !!user,
+    projectId
+  });
+  
   const [columns, setColumns] = useState<Column[]>([]);
   const [addingTaskCol, setAddingTaskCol] = useState<number | null>(null);
   const [newTaskData, setNewTaskData] = useState<NewTaskData>({
@@ -116,6 +126,9 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
 
   const loadBoard = async () => {
     try {
+      console.log('🔄 loadBoard started for projectId:', projectId);
+      console.log('👤 Current user in loadBoard:', user);
+      
       setLoading(true);
       setError(null);
       
@@ -132,22 +145,38 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
       setProjectData(project);
       
       // Определяем роли пользователя в проекте
+      console.log('🔍 Checking user permissions for project:', {
+        userId: user?.uid,
+        userRoles: user?.roles,
+        projectManager: project.manager,
+        projectPmId: project.pmId,
+        projectTeamLead: project.teamLead,
+        projectTeamMembers: project.teamMembers
+      });
+      
+      // Упрощенная логика определения прав PM
       const isUserPM = user && (
-        user.uid === project.teamLead ||
+        user.roles?.includes('admin') ||
         user.uid === project.manager ||
         user.uid === project.pmId ||
-        user.roles?.includes('admin') ||
+        user.uid === project.teamLead ||
         (user.roles?.includes('pm') && (
-          project.teamLead === user.uid || 
-          project.manager === user.uid || 
-          project.pmId === user.uid
+          user.uid === project.manager || 
+          user.uid === project.pmId ||
+          user.uid === project.teamLead
         ))
       );
       
       const isUserExecutor = user && (
         project.team?.includes(user.uid) ||
-        project.teamMembers?.some((member: any) => member.id === user.uid)
+        project.teamMembers?.some((member: any) => member.id === user.uid || member === user.uid)
       );
+      
+      console.log('✅ User permissions determined:', {
+        isUserPM,
+        isUserExecutor,
+        canCreateTasks: isUserPM || user?.roles?.includes('admin')
+      });
       
       setIsProjectPM(isUserPM || false);
       setIsProjectExecutor(isUserExecutor || false);
@@ -360,20 +389,23 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
 
   if (loading) {
     return (
-      <div className="bg-[#F6F7F9] min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-main-colorsaqua"></div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-main-colorsaqua mx-auto mb-4"></div>
+          <p className="text-neutralneutral-60">Загрузка доски...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-[#F6F7F9] min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error}</p>
           <button 
             onClick={loadBoard}
-            className="px-4 py-2 bg-main-colorsaqua text-white rounded-lg hover:bg-[#3771C8] transition-colors"
+            className="px-4 py-2 bg-main-colorsaqua text-white rounded-lg hover:bg-[#3771C8]"
           >
             Попробовать снова
           </button>
@@ -381,6 +413,18 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
       </div>
     );
   }
+
+  // Отладочная информация о состоянии прав
+  console.log('🎯 Render state check:', {
+    isProjectPM,
+    isProjectExecutor,
+    userRoles: user?.roles,
+    projectData: projectData ? {
+      manager: projectData.manager,
+      pmId: projectData.pmId,
+      teamLead: projectData.teamLead
+    } : null
+  });
 
   return (
     <div className="bg-[#F6F7F9] min-h-screen flex flex-col items-center px-0 md:px-0 pt-0 md:pt-0">

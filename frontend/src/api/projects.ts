@@ -91,14 +91,14 @@ export async function removeTeamMember(projectId: string, userId: string): Promi
 
 // Получить команду проекта
 export async function getProjectTeam(projectId: string): Promise<any> {
-  const response = await apiClient.get(`/teams/${projectId}`);
+  const response = await apiClient.get(`/projects/${projectId}/team`);
   return response.data;
 }
 
 // Получить доступных исполнителей
 export async function getAvailableExecutors() {
   try {
-    const response = await apiClient.get('/users?role=executor');
+    const response = await apiClient.get('/executors/search');
     return response.data;
   } catch (error) {
     console.error('Error getting available executors:', error);
@@ -109,7 +109,7 @@ export async function getAvailableExecutors() {
 // Отправить приглашение исполнителю
 export async function sendInvitationToExecutor(projectId: string, executorId: string, message?: string) {
   try {
-    const response = await apiClient.post(`/projects/${projectId}/send-invitation`, {
+    const response = await apiClient.post(`/projects/${projectId}/invite`, {
       executorId,
       message
     });

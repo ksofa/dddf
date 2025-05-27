@@ -73,10 +73,9 @@ router.get('/', authenticate, async (req, res) => {
       // Для PM получаем все команды и фильтруем в памяти
       teamsSnapshot = await db.collection('teams').get();
     } else {
-      // Для других ролей - показываем команды где пользователь является участником
-      teamsSnapshot = await db.collection('teams')
-        .where('memberIds', 'array-contains', userId)
-        .get();
+      // Для других ролей - получаем все команды и фильтруем в памяти
+      // так как участники могут храниться в разных структурах
+      teamsSnapshot = await db.collection('teams').get();
     }
     
     const teams = [];
@@ -156,8 +155,11 @@ router.get('/', authenticate, async (req, res) => {
           }
         }
         teamData.members = members;
+      } else if (teamData.members && Array.isArray(teamData.members)) {
+        // Структура 2: members уже массив объектов - оставляем как есть
+        // Данные уже загружены и обработаны
       } else if (teamData.members && typeof teamData.members === 'object') {
-        // Структура 2: members как объект
+        // Структура 3: members как объект
         const membersArray = [];
         for (const [memberId, memberData] of Object.entries(teamData.members)) {
           const memberDoc = await db.collection('users').doc(memberId).get();
@@ -175,6 +177,31 @@ router.get('/', authenticate, async (req, res) => {
         teamData.members = membersArray;
       } else {
         teamData.members = [];
+      }
+      
+      // Проверяем права доступа для исполнителей и других ролей ПОСЛЕ загрузки данных участников
+      if (!userRoles.includes('admin') && !userRoles.includes('pm')) {
+        let isMember = false;
+        
+        // Проверяем структуру 1: memberIds
+        if (teamData.memberIds && teamData.memberIds.includes(userId)) {
+          isMember = true;
+        }
+        
+        // Проверяем структуру 2: members как массив объектов (уже обработанный)
+        if (teamData.members && Array.isArray(teamData.members)) {
+          const memberFound = teamData.members.find(member => 
+            member.id === userId || member.uid === userId
+          );
+          if (memberFound) {
+            isMember = true;
+          }
+        }
+        
+        // Если пользователь не является участником команды, пропускаем
+        if (!isMember) {
+          continue;
+        }
       }
       
       teams.push(teamData);

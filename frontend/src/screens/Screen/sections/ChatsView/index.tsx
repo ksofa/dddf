@@ -9,7 +9,7 @@ import {
   getChatMessages, 
   sendMessage, 
   createChat,
-  getAllUsers,
+  getProjectMembers,
   markMessagesAsRead, 
   Chat, 
   Message, 
@@ -85,7 +85,6 @@ export const ChatsView = () => {
       } else {
         loadChats();
       }
-      loadAllUsers();
     }
   }, [user]);
 
@@ -138,8 +137,18 @@ export const ChatsView = () => {
     try {
       setSelectedProject(project);
       const projectChats = await getProjectChats(project.id);
-      setChats(projectChats as ExtendedChat[]);
+      
+      // Добавляем projectId к каждому чату
+      const chatsWithProjectId = projectChats.map(chat => ({
+        ...chat,
+        projectId: project.id
+      }));
+      
+      setChats(chatsWithProjectId as ExtendedChat[]);
       setMobileView('chats');
+      
+      // Загружаем участников проекта для создания чатов
+      await loadAllUsers();
     } catch (error) {
       console.error('Error loading project chats:', error);
     }
@@ -159,10 +168,12 @@ export const ChatsView = () => {
 
   const loadAllUsers = async () => {
     try {
-      const users = await getAllUsers();
-      setAllUsers(users.filter(u => u.id !== user?.uid));
+      if (selectedProject) {
+        const users = await getProjectMembers(selectedProject.id);
+        setAllUsers(users.filter((u: User) => u.id !== user?.uid));
+      }
     } catch (error) {
-      console.error('Error loading users:', error);
+      console.error('Error loading project members:', error);
     }
   };
 
@@ -171,11 +182,19 @@ export const ChatsView = () => {
     try {
       setSelectedChat(chat);
       
-      const chatMessages = await getChatMessages(chat.projectId, chat.id);
+      // Используем selectedProject.id если chat.projectId не определен
+      const projectId = chat.projectId || selectedProject?.id;
+      
+      if (!projectId) {
+        console.error('No project ID available for chat messages');
+        return;
+      }
+      
+      const chatMessages = await getChatMessages(projectId, chat.id);
       setMessages(chatMessages as ExtendedMessage[]);
       
       // Отмечаем сообщения как прочитанные
-      await markMessagesAsRead(chat.projectId, chat.id);
+      await markMessagesAsRead(projectId, chat.id);
       
       setMobileView('messages');
     } catch (error) {
@@ -188,9 +207,17 @@ export const ChatsView = () => {
     
     setSendingMessage(true);
     try {
+      // Используем selectedProject.id если selectedChat.projectId не определен
+      const projectId = selectedChat.projectId || selectedProject?.id;
+      
+      if (!projectId) {
+        console.error('No project ID available for sending message');
+        return;
+      }
+      
       const messageData: SendMessageRequest = {
         chatId: selectedChat.id,
-        projectId: selectedChat.projectId,
+        projectId: projectId,
         text: newMessage
       };
       

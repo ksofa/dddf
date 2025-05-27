@@ -12,15 +12,15 @@ interface TeamMember {
 }
 
 interface Team {
-  id: string;
   projectId: string;
-  manager: string;
+  projectTitle: string;
+  teamMembers: TeamMember[];
+  canManage: boolean;
   teamLead?: {
     id: string;
     displayName: string;
     email: string;
   };
-  members: TeamMember[];
   customerInfo?: {
     fullName: string;
     phone: string;
@@ -62,6 +62,14 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
       setLoading(true);
       const teamData = await getProjectTeam(projectId);
       setTeam(teamData);
+      
+      console.log('🔍 Team data loaded:', {
+        projectId,
+        userId: user?.uid,
+        userRoles: user?.roles,
+        teamManager: teamData?.teamLead?.displayName,
+        teamData
+      });
     } catch (error) {
       console.error('Error loading team:', error);
     } finally {
@@ -75,7 +83,7 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
       const executors = await getAvailableExecutors();
       
       // Фильтруем исполнителей, которые уже в команде
-      const teamMemberIds = team?.members?.map(member => member.id) || [];
+      const teamMemberIds = team?.teamMembers?.map(member => member.id) || [];
       const filteredExecutors = executors.filter((executor: Executor) => 
         !teamMemberIds.includes(executor.id)
       );
@@ -140,7 +148,26 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
     setInviteMessage('');
   };
 
-  const isPM = user?.roles?.includes('pm') || user?.roles?.includes('pm') || user?.role === 'pm';
+  const isPM = user?.roles?.includes('pm') || user?.roles?.includes('project_manager') || user?.role === 'pm';
+  
+  // Дополнительная проверка - является ли пользователь менеджером этого проекта
+  // team содержит данные из API: { projectId, projectTitle, teamMembers, canManage }
+  const isProjectManager = team && user && (
+    team.canManage || // API возвращает canManage: project.manager === userId
+    user.roles?.includes('admin')
+  );
+  
+  const canInvite = isPM && isProjectManager;
+  
+  console.log('🔍 Permission check for team invitations:', {
+    userId: user?.uid,
+    userRoles: user?.roles,
+    isPM,
+    isProjectManager,
+    canInvite,
+    canManageFromAPI: team?.canManage,
+    teamData: team
+  });
 
   if (loading) {
     return (
@@ -225,9 +252,9 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
             <h2 className="text-lg font-semibold">Участники команды</h2>
             <div className="flex items-center gap-3">
               <span className="text-sm text-[#A5A5A7]">
-                {team.members.length} участник{team.members.length !== 1 ? 'ов' : ''}
+                {team.teamMembers.length} участник{team.teamMembers.length !== 1 ? 'ов' : ''}
               </span>
-              {isPM && (
+              {canInvite && (
                 <button
                   onClick={openInviteModal}
                   className="px-4 py-2 bg-[#2982FD] text-white rounded-lg text-sm font-medium hover:bg-[#1c5aa8] transition-colors"
@@ -238,10 +265,10 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
             </div>
           </div>
 
-          {team.members.length === 0 ? (
+          {team.teamMembers.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-[#A5A5A7] mb-4">В команде пока нет участников</p>
-              {isPM && (
+              {canInvite && (
                 <button
                   onClick={openInviteModal}
                   className="px-4 py-2 bg-[#2982FD] text-white rounded-lg text-sm font-medium hover:bg-[#1c5aa8] transition-colors"
@@ -252,7 +279,7 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {team.members.map((member) => (
+              {team.teamMembers.map((member) => (
                 <div key={member.id} className="flex items-center gap-3 p-3 border border-[#ECECEC] rounded-lg">
                   <div className="w-10 h-10 bg-[#F3F7FE] rounded-full flex items-center justify-center">
                     {member.avatar ? (
@@ -267,7 +294,7 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
                     <p className="font-medium text-sm">{member.name || 'Неизвестный участник'}</p>
                     <p className="text-xs text-[#A5A5A7]">{member.role || 'Участник команды'}</p>
                   </div>
-                  {isPM && (
+                  {canInvite && (
                     <button
                       onClick={() => handleRemoveExecutor(member.id)}
                       className="text-red-500 hover:text-red-700 text-sm"

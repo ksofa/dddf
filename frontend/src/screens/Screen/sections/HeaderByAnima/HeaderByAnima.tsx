@@ -18,9 +18,35 @@ export const HeaderByAnima = ({
 
   // User account data
   const currentUser = getCurrentUser();
+  
+  // Функция для получения отображаемой роли
+  const getUserRoleDisplay = (user: any) => {
+    if (!user || !user.roles || user.roles.length === 0) {
+      return "Пользователь";
+    }
+    
+    // Приоритет ролей для отображения
+    const roleDisplayMap: { [key: string]: string } = {
+      'admin': 'Администратор',
+      'pm': 'Проект-менеджер',
+      'executor': 'Исполнитель',
+      'customer': 'Заказчик'
+    };
+    
+    // Ищем первую роль из приоритетного списка
+    for (const role of ['admin', 'pm', 'executor', 'customer']) {
+      if (user.roles.includes(role)) {
+        return roleDisplayMap[role];
+      }
+    }
+    
+    // Если нет стандартных ролей, показываем первую роль
+    return user.roles[0];
+  };
+  
   const accountInfo = {
     balance: "1 000 000₽",
-    role: currentUser?.role || "Пользователь",
+    role: getUserRoleDisplay(currentUser),
   };
 
   const handleLogout = () => {
@@ -65,8 +91,8 @@ export const HeaderByAnima = ({
           </div>
         </div>
 
-        {/* Date and time */}
-        <div className="flex items-center gap-3">
+        {/* Date and time - скрываем на мобильных */}
+        <div className="hidden md:flex items-center gap-3">
           <div className="text-neutralneutral-60 font-paragraph-16-medium text-[length:var(--paragraph-16-medium-font-size)] leading-[var(--paragraph-16-medium-line-height)]">
             {dateInfo.date}
           </div>
@@ -77,7 +103,7 @@ export const HeaderByAnima = ({
       </div>
 
       {/* Middle section - Hidden breadcrumbs (opacity-0 in original) */}
-      <div className="flex items-center opacity-0 gap-1">
+      <div className="hidden lg:flex items-center opacity-0 gap-1">
         <div className="flex justify-center gap-2.5 rounded-sm items-center">
           <div className="text-neutralneutral-10 font-paragraph-16 text-[length:var(--paragraph-16-font-size)] leading-[var(--paragraph-16-line-height)]">
             Проекты
@@ -104,19 +130,19 @@ export const HeaderByAnima = ({
           <img className="w-6 h-6" alt="Notifications" src="/frame-2.svg" />
         </Button>
 
-        {/* Settings button */}
+        {/* Settings button - скрываем на мобильных */}
         <Button
           variant="outline"
           size="icon"
-          className="h-12 w-12 rounded-full border-[#dededf]"
+          className="hidden sm:flex h-12 w-12 rounded-full border-[#dededf]"
         >
           <img className="w-6 h-6" alt="Settings" src="/frame-3.svg" />
         </Button>
 
-        {/* Balance display */}
+        {/* Balance display - скрываем на мобильных */}
         <Button
           variant="outline"
-          className="h-12 px-3 rounded-full border-[#dededf] flex items-center gap-1"
+          className="hidden lg:flex h-12 px-3 rounded-full border-[#dededf] items-center gap-1"
         >
           <div className="flex w-8 h-8 items-center justify-center">
             <img className="w-6 h-6" alt="Balance icon" src="/frame-4.svg" />
@@ -132,14 +158,14 @@ export const HeaderByAnima = ({
           </div>
         </Button>
 
-        {/* User role selector */}
+        {/* User role selector - упрощаем на мобильных */}
         <Button
           variant="outline"
           className="h-12 px-4 rounded-full border-[#dededf] flex items-center gap-2"
           onClick={onProfileClick}
         >
           <img className="w-6 h-6" alt="Person" src="/person.svg" />
-          <div className="flex items-center gap-1">
+          <div className="hidden sm:flex items-center gap-1">
             <span className="font-paragraph-16-medium text-neutralneutral-10 text-[length:var(--paragraph-16-medium-font-size)] leading-[var(--paragraph-16-medium-line-height)]">
               {accountInfo.role}
             </span>
@@ -147,10 +173,10 @@ export const HeaderByAnima = ({
           </div>
         </Button>
 
-        {/* Logout button */}
+        {/* Logout button - скрываем на мобильных, будет в боковом меню */}
         <Button
           variant="outline"
-          className="h-12 px-4 rounded-full border-[#dededf] flex items-center gap-2 text-red-600 hover:bg-red-50"
+          className="hidden md:flex h-12 px-4 rounded-full border-[#dededf] items-center gap-2 text-red-600 hover:bg-red-50"
           onClick={handleLogout}
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

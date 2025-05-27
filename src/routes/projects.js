@@ -173,6 +173,7 @@ const router = express.Router();
 const { db } = require('../config/firebase');
 const { authenticate, checkRole } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
+const admin = require('firebase-admin');
 
 // Firebase error handler
 const handleFirebaseError = (error) => {
@@ -891,7 +892,6 @@ router.delete('/:projectId',
 // Project tasks routes
 router.post('/:projectId/tasks',
   authenticate,
-  checkRole(['pm']),
   [
     body('text').notEmpty().trim(),
     body('column').notEmpty().trim()
@@ -905,6 +905,40 @@ router.post('/:projectId/tasks',
 
       const { projectId } = req.params;
       const { text, column } = req.body;
+
+      // Check if user is PM of the project
+      const projectDoc = await db.collection('projects').doc(projectId).get();
+      if (!projectDoc.exists) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      const project = projectDoc.data();
+      
+      // Проверяем права доступа для создания задач
+      const canCreateTasks = 
+        req.user.roles && req.user.roles.includes('admin') ||
+        project.pmId === req.user.uid ||
+        project.teamLead === req.user.uid ||
+        project.manager === req.user.uid ||
+        (req.user.roles && req.user.roles.includes('pm') && (
+          project.pmId === req.user.uid ||
+          project.teamLead === req.user.uid ||
+          project.manager === req.user.uid
+        ));
+      
+      console.log('🔍 Task creation permission check (projects.js):', {
+        userId: req.user.uid,
+        userRoles: req.user.roles,
+        projectId: projectId,
+        projectPmId: project.pmId,
+        projectTeamLead: project.teamLead,
+        projectManager: project.manager,
+        canCreateTasks: canCreateTasks
+      });
+      
+      if (!canCreateTasks) {
+        return res.status(403).json({ message: 'Not authorized to create tasks in this project' });
+      }
 
       const taskData = {
         text,
@@ -932,7 +966,6 @@ router.post('/:projectId/tasks',
 
 router.put('/:projectId/tasks/:taskId',
   authenticate,
-  checkRole(['pm']),
   [
     body('text').optional().trim(),
     body('column').optional().trim(),
@@ -948,6 +981,40 @@ router.put('/:projectId/tasks/:taskId',
 
       const { projectId, taskId } = req.params;
       const updateData = req.body;
+
+      // Check if user is PM of the project
+      const projectDoc = await db.collection('projects').doc(projectId).get();
+      if (!projectDoc.exists) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      const project = projectDoc.data();
+      
+      // Проверяем права доступа для обновления задач
+      const canUpdateTasks = 
+        req.user.roles && req.user.roles.includes('admin') ||
+        project.pmId === req.user.uid ||
+        project.teamLead === req.user.uid ||
+        project.manager === req.user.uid ||
+        (req.user.roles && req.user.roles.includes('pm') && (
+          project.pmId === req.user.uid ||
+          project.teamLead === req.user.uid ||
+          project.manager === req.user.uid
+        ));
+      
+      console.log('🔍 Task update permission check (projects.js):', {
+        userId: req.user.uid,
+        userRoles: req.user.roles,
+        projectId: projectId,
+        projectPmId: project.pmId,
+        projectTeamLead: project.teamLead,
+        projectManager: project.manager,
+        canUpdateTasks: canUpdateTasks
+      });
+      
+      if (!canUpdateTasks) {
+        return res.status(403).json({ message: 'Not authorized to update tasks in this project' });
+      }
 
       await db.collection('projects')
         .doc(projectId)
@@ -965,627 +1032,6 @@ router.put('/:projectId/tasks/:taskId',
     }
   }
 );
-
-// Подача заявки на проект без регистрации (для заказчиков)
-router.post('/project-request', async (req, res) => {
-  try {
-    const { 
-      companyName, 
-      contactPerson, 
-      email, 
-      phone, 
-      projectTitle, 
-      projectDescription, 
-      budget, 
-      deadline,
-      requirements 
-    } = req.body;
-
-    // Валидация обязательных полей
-    if (!companyName || !contactPerson || !email || !projectTitle || !projectDescription) {
-      return res.status(400).json({ 
-        error: 'Обязательные поля: companyName, contactPerson, email, projectTitle, projectDescription' 
-      });
-    }
-
-    const projectRequest = {
-      companyName,
-      contactPerson,
-      email,
-      phone: phone || '',
-      projectTitle,
-      projectDescription,
-      budget: budget || '',
-      deadline: deadline || '',
-      requirements: requirements || '',
-      status: 'pending', // pending, approved, rejected
-      createdAt: new Date().toISOString(),
-      assignedTeamLead: null,
-      teamMembers: []
-    };
-
-    const docRef = await db.collection('project-requests').add(projectRequest);
-    
-    res.status(201).json({
-      message: 'Заявка на проект успешно отправлена',
-      requestId: docRef.id,
-      data: { ...projectRequest, id: docRef.id }
-    });
-  } catch (error) {
-    console.error('Error creating project request:', error);
-    res.status(500).json({ error: 'Ошибка при создании заявки' });
-  }
-});
-
-// Получить все заявки на проекты (только для админов)
-router.get('/project-requests', authenticate, checkRole(['admin']), async (req, res) => {
-  try {
-    const snapshot = await db.collection('project-requests').orderBy('createdAt', 'desc').get();
-    const requests = [];
-    
-    snapshot.forEach(doc => {
-      requests.push({ id: doc.id, ...doc.data() });
-    });
-
-    res.json(requests);
-  } catch (error) {
-    console.error('Error fetching project requests:', error);
-    res.status(500).json({ error: 'Ошибка при получении заявок' });
-  }
-});
-
-// Одобрить заявку и создать проект (только для админов)
-router.post('/project-requests/:requestId/approve', authenticate, checkRole(['admin']), async (req, res) => {
-  try {
-    const { requestId } = req.params;
-    const { teamLeadId } = req.body; // ID тимлида для назначения
-
-    // Получаем заявку
-    const requestDoc = await db.collection('project-requests').doc(requestId).get();
-    if (!requestDoc.exists) {
-      return res.status(404).json({ error: 'Заявка не найдена' });
-    }
-
-    const requestData = requestDoc.data();
-
-    // Проверяем, что тимлид существует и имеет правильную роль
-    if (teamLeadId) {
-      const teamLeadDoc = await db.collection('users').doc(teamLeadId).get();
-      if (!teamLeadDoc.exists) {
-        return res.status(404).json({ error: 'Тимлид не найден' });
-      }
-      
-      const teamLeadData = teamLeadDoc.data();
-      if (!teamLeadData.roles || !teamLeadData.roles.includes('teamlead')) {
-        return res.status(400).json({ error: 'Пользователь не является тимлидом' });
-      }
-    }
-
-    // Создаем проект
-    const project = {
-      title: requestData.projectTitle,
-      description: requestData.projectDescription,
-      clientCompany: requestData.companyName,
-      clientContact: requestData.contactPerson,
-      clientEmail: requestData.email,
-      clientPhone: requestData.phone,
-      budget: requestData.budget,
-      deadline: requestData.deadline,
-      requirements: requestData.requirements,
-      status: 'active',
-      teamLead: teamLeadId || null,
-      teamMembers: teamLeadId ? [teamLeadId] : [],
-      createdAt: new Date().toISOString(),
-      createdBy: req.user.uid,
-      originalRequestId: requestId
-    };
-
-    const projectRef = await db.collection('projects').add(project);
-
-    // Обновляем статус заявки
-    await db.collection('project-requests').doc(requestId).update({
-      status: 'approved',
-      approvedAt: new Date().toISOString(),
-      approvedBy: req.user.uid,
-      projectId: projectRef.id,
-      assignedTeamLead: teamLeadId
-    });
-
-    res.json({
-      message: 'Заявка одобрена и проект создан',
-      projectId: projectRef.id,
-      project: { ...project, id: projectRef.id }
-    });
-  } catch (error) {
-    console.error('Error approving project request:', error);
-    res.status(500).json({ error: 'Ошибка при одобрении заявки' });
-  }
-});
-
-// Отклонить заявку (только для админов)
-router.post('/project-requests/:requestId/reject', authenticate, checkRole(['admin']), async (req, res) => {
-  try {
-    const { requestId } = req.params;
-    const { reason } = req.body;
-
-    const requestDoc = await db.collection('project-requests').doc(requestId).get();
-    if (!requestDoc.exists) {
-      return res.status(404).json({ error: 'Заявка не найдена' });
-    }
-
-    await db.collection('project-requests').doc(requestId).update({
-      status: 'rejected',
-      rejectedAt: new Date().toISOString(),
-      rejectedBy: req.user.uid,
-      rejectionReason: reason || ''
-    });
-
-    res.json({ message: 'Заявка отклонена' });
-  } catch (error) {
-    console.error('Error rejecting project request:', error);
-    res.status(500).json({ error: 'Ошибка при отклонении заявки' });
-  }
-});
-
-// Назначить тимлида на проект (только для админов)
-router.post('/:projectId/assign-teamlead', authenticate, checkRole(['admin']), async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { teamLeadId } = req.body;
-
-    // Проверяем существование проекта
-    const projectDoc = await db.collection('projects').doc(projectId).get();
-    if (!projectDoc.exists) {
-      return res.status(404).json({ error: 'Проект не найден' });
-    }
-
-    // Проверяем, что тимлид существует и имеет правильную роль
-    const teamLeadDoc = await db.collection('users').doc(teamLeadId).get();
-    if (!teamLeadDoc.exists) {
-      return res.status(404).json({ error: 'Тимлид не найден' });
-    }
-    
-    const teamLeadData = teamLeadDoc.data();
-    if (!teamLeadData.roles || !teamLeadData.roles.includes('teamlead')) {
-      return res.status(400).json({ error: 'Пользователь не является тимлидом' });
-    }
-
-    const projectData = projectDoc.data();
-    const updatedTeamMembers = projectData.teamMembers || [];
-    
-    // Добавляем тимлида в команду, если его там нет
-    if (!updatedTeamMembers.includes(teamLeadId)) {
-      updatedTeamMembers.push(teamLeadId);
-    }
-
-    await db.collection('projects').doc(projectId).update({
-      teamLead: teamLeadId,
-      teamMembers: updatedTeamMembers,
-      updatedAt: new Date().toISOString()
-    });
-
-    res.json({ message: 'Тимлид назначен на проект' });
-  } catch (error) {
-    console.error('Error assigning team lead:', error);
-    res.status(500).json({ error: 'Ошибка при назначении тимлида' });
-  }
-});
-
-// Добавить участника в команду (только для тимлидов проекта, PM или админов)
-router.post('/:projectId/add-member', authenticate, async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { userId } = req.body;
-
-    // Проверяем существование проекта
-    const projectDoc = await db.collection('projects').doc(projectId).get();
-    if (!projectDoc.exists) {
-      return res.status(404).json({ error: 'Проект не найден' });
-    }
-
-    const projectData = projectDoc.data();
-
-    // Проверяем, что пользователь является тимлидом этого проекта, PM проекта или админом
-    const isTeamLead = projectData.teamLead === req.user.uid;
-    const isProjectManager = projectData.manager === req.user.uid;
-    const isPM = req.user.roles && (req.user.roles.includes('pm') || req.user.roles.includes('pm'));
-    const isAdmin = req.user.roles && req.user.roles.includes('admin');
-    
-    if (!isTeamLead && !isProjectManager && !isPM && !isAdmin) {
-      return res.status(403).json({ error: 'Только тимлид проекта, PM или админ может добавлять участников' });
-    }
-
-    // Проверяем существование пользователя
-    const userDoc = await db.collection('users').doc(userId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'Пользователь не найден' });
-    }
-
-    const teamMembers = projectData.teamMembers || [];
-    
-    // Проверяем, что пользователь еще не в команде
-    if (teamMembers.includes(userId)) {
-      return res.status(400).json({ error: 'Пользователь уже в команде проекта' });
-    }
-
-    teamMembers.push(userId);
-
-    // Также обновляем команду в коллекции teams, если она существует
-    try {
-      const teamDoc = await db.collection('teams').where('projectId', '==', projectId).get();
-      if (!teamDoc.empty) {
-        const teamData = teamDoc.docs[0].data();
-        const updatedMembers = teamData.members || [];
-        
-        // Добавляем нового участника в команду
-        const userData = userDoc.data();
-        const newMember = {
-          id: userId,
-          name: userData.displayName || userData.fullName,
-          email: userData.email,
-          role: userData.specialization || 'Исполнитель'
-        };
-        
-        updatedMembers.push(newMember);
-        
-        await db.collection('teams').doc(teamDoc.docs[0].id).update({
-          members: updatedMembers,
-          updatedAt: new Date()
-        });
-      }
-    } catch (teamError) {
-      console.log('Team update error (non-critical):', teamError);
-    }
-
-    await db.collection('projects').doc(projectId).update({
-      teamMembers,
-      updatedAt: new Date().toISOString()
-    });
-
-    res.json({ message: 'Участник добавлен в команду проекта' });
-  } catch (error) {
-    console.error('Error adding team member:', error);
-    res.status(500).json({ error: 'Ошибка при добавлении участника' });
-  }
-});
-
-// Scrum board routes
-router.get('/:projectId/board', authenticate, async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    
-    // Get project to check access
-    const projectDoc = await db.collection('projects').doc(projectId).get();
-    if (!projectDoc.exists) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
-
-    const projectData = projectDoc.data();
-    
-    // Check if user has access to the board
-    const hasAccess = 
-      req.user.roles.includes('admin') ||
-      projectData.pmId === req.user.uid ||
-      projectData.teamLead === req.user.uid ||
-      (projectData.teamMembers && projectData.teamMembers.includes(req.user.uid));
-
-    if (!hasAccess) {
-      return res.status(403).json({ error: 'Access denied to board' });
-    }
-
-    // Get all tasks for the project
-    const tasksSnapshot = await db.collection('projects')
-      .doc(projectId)
-      .collection('tasks')
-      .orderBy('createdAt', 'desc')
-      .get();
-
-    const tasks = [];
-    tasksSnapshot.forEach(doc => {
-      tasks.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
-
-    // Get team members for assignee information
-    const teamMembers = [];
-    if (projectData.teamMembers && projectData.teamMembers.length > 0) {
-      const memberPromises = projectData.teamMembers.map(async (memberId) => {
-        const memberDoc = await db.collection('users').doc(memberId).get();
-        if (memberDoc.exists) {
-          const memberData = memberDoc.data();
-          teamMembers.push({
-            id: memberId,
-            displayName: memberData.displayName || memberData.fullName,
-            email: memberData.email,
-            roles: memberData.roles
-          });
-        }
-      });
-      await Promise.all(memberPromises);
-    }
-
-    // Organize tasks by status
-    const board = {
-      backlog: tasks.filter(task => task.status === 'backlog'),
-      todo: tasks.filter(task => task.status === 'todo'),
-      in_progress: tasks.filter(task => task.status === 'in_progress'),
-      review: tasks.filter(task => task.status === 'review'),
-      done: tasks.filter(task => task.status === 'done')
-    };
-
-    res.json({
-      board,
-      teamMembers,
-      project: {
-        id: projectId,
-        title: projectData.title,
-        description: projectData.description
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching board:', error);
-    const { status, message } = handleFirebaseError(error);
-    res.status(status).json({ error: message });
-  }
-});
-
-// Create task (PM only)
-router.post('/:projectId/tasks', authenticate, async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    const { title, description, status = 'todo', assigneeId, priority = 'medium', dueDate } = req.body;
-
-    // Get project to check PM access
-    const projectDoc = await db.collection('projects').doc(projectId).get();
-    if (!projectDoc.exists) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
-
-    const projectData = projectDoc.data();
-
-    // Check if user is PM of this project
-    const isPM = projectData.pmId === req.user.uid;
-    const isAdmin = req.user.roles.includes('admin');
-    
-    if (!isPM && !isAdmin) {
-      return res.status(403).json({ error: 'Only project manager can create tasks' });
-    }
-
-    // Validate assignee if provided
-    if (assigneeId) {
-      const assigneeDoc = await db.collection('users').doc(assigneeId).get();
-      if (!assigneeDoc.exists) {
-        return res.status(400).json({ error: 'Assignee not found' });
-      }
-      
-      // Check if assignee is a team member
-      if (!projectData.teamMembers.includes(assigneeId)) {
-        return res.status(400).json({ error: 'Assignee must be a team member' });
-      }
-    }
-
-    const taskData = {
-      title,
-      description,
-      status,
-      assigneeId,
-      priority,
-      dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-      createdAt: new Date().toISOString(),
-      createdBy: req.user.uid,
-      updatedAt: new Date().toISOString()
-    };
-
-    const taskRef = await db.collection('projects')
-      .doc(projectId)
-      .collection('tasks')
-      .add(taskData);
-
-    // Create activity log
-    await db.collection('projects')
-      .doc(projectId)
-      .collection('activity')
-      .add({
-        type: 'task_created',
-        userId: req.user.uid,
-        details: {
-          taskId: taskRef.id,
-          title,
-          status,
-          assigneeId
-        },
-        timestamp: new Date()
-      });
-
-    // Create notification for assignee if assigned
-    if (assigneeId) {
-      await db.collection('users')
-        .doc(assigneeId)
-        .collection('notifications')
-        .add({
-          type: 'task_assigned',
-          title: 'New Task Assigned',
-          message: `You have been assigned to task "${title}" in project "${projectData.title}"`,
-          projectId,
-          taskId: taskRef.id,
-          read: false,
-          createdAt: new Date()
-        });
-    }
-
-    res.status(201).json({
-      message: 'Task created successfully',
-      taskId: taskRef.id,
-      task: { id: taskRef.id, ...taskData }
-    });
-  } catch (error) {
-    console.error('Error creating task:', error);
-    const { status, message } = handleFirebaseError(error);
-    res.status(status).json({ error: message });
-  }
-});
-
-// Update task status (PM and assignee)
-router.put('/:projectId/tasks/:taskId/status', authenticate, async (req, res) => {
-  try {
-    const { projectId, taskId } = req.params;
-    const { status } = req.body;
-
-    // Validate status
-    const validStatuses = ['backlog', 'todo', 'in_progress', 'review', 'done'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
-    }
-
-    // Get task
-    const taskDoc = await db.collection('projects')
-      .doc(projectId)
-      .collection('tasks')
-      .doc(taskId)
-      .get();
-
-    if (!taskDoc.exists) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-
-    const taskData = taskDoc.data();
-
-    // Check if user has permission to update status
-    const isPM = taskData.createdBy === req.user.uid;
-    const isAssignee = taskData.assigneeId === req.user.uid;
-    const isAdmin = req.user.roles.includes('admin');
-
-    if (!isPM && !isAssignee && !isAdmin) {
-      return res.status(403).json({ error: 'Not authorized to update task status' });
-    }
-
-    // Update task
-    await db.collection('projects')
-      .doc(projectId)
-      .collection('tasks')
-      .doc(taskId)
-      .update({
-        status,
-        updatedAt: new Date().toISOString()
-      });
-
-    // Create activity log
-    await db.collection('projects')
-      .doc(projectId)
-      .collection('activity')
-      .add({
-        type: 'task_status_updated',
-        userId: req.user.uid,
-        details: {
-          taskId,
-          oldStatus: taskData.status,
-          newStatus: status
-        },
-        timestamp: new Date()
-      });
-
-    res.json({ message: 'Task status updated successfully' });
-  } catch (error) {
-    console.error('Error updating task status:', error);
-    const { status, message } = handleFirebaseError(error);
-    res.status(status).json({ error: message });
-  }
-});
-
-// Update task details (PM only)
-router.put('/:projectId/tasks/:taskId', authenticate, async (req, res) => {
-  try {
-    const { projectId, taskId } = req.params;
-    const { title, description, assigneeId, priority, dueDate } = req.body;
-
-    // Get task
-    const taskDoc = await db.collection('projects')
-      .doc(projectId)
-      .collection('tasks')
-      .doc(taskId)
-      .get();
-
-    if (!taskDoc.exists) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-
-    const taskData = taskDoc.data();
-
-    // Check if user is PM
-    const isPM = taskData.createdBy === req.user.uid;
-    const isAdmin = req.user.roles.includes('admin');
-
-    if (!isPM && !isAdmin) {
-      return res.status(403).json({ error: 'Only project manager can update task details' });
-    }
-
-    // Validate assignee if provided
-    if (assigneeId && assigneeId !== taskData.assigneeId) {
-      const projectDoc = await db.collection('projects').doc(projectId).get();
-      const projectData = projectDoc.data();
-
-      const assigneeDoc = await db.collection('users').doc(assigneeId).get();
-      if (!assigneeDoc.exists) {
-        return res.status(400).json({ error: 'Assignee not found' });
-      }
-      
-      if (!projectData.teamMembers.includes(assigneeId)) {
-        return res.status(400).json({ error: 'Assignee must be a team member' });
-      }
-
-      // Create notification for new assignee
-      await db.collection('users')
-        .doc(assigneeId)
-        .collection('notifications')
-        .add({
-          type: 'task_assigned',
-          title: 'Task Assigned',
-          message: `You have been assigned to task "${taskData.title}"`,
-          projectId,
-          taskId,
-          read: false,
-          createdAt: new Date()
-        });
-    }
-
-    const updateData = {
-      ...(title && { title }),
-      ...(description && { description }),
-      ...(assigneeId && { assigneeId }),
-      ...(priority && { priority }),
-      ...(dueDate && { dueDate: new Date(dueDate).toISOString() }),
-      updatedAt: new Date().toISOString()
-    };
-
-    await db.collection('projects')
-      .doc(projectId)
-      .collection('tasks')
-      .doc(taskId)
-      .update(updateData);
-
-    // Create activity log
-    await db.collection('projects')
-      .doc(projectId)
-      .collection('activity')
-      .add({
-        type: 'task_updated',
-        userId: req.user.uid,
-        details: {
-          taskId,
-          updates: updateData
-        },
-        timestamp: new Date()
-      });
-
-    res.json({ message: 'Task updated successfully' });
-  } catch (error) {
-    console.error('Error updating task:', error);
-    const { status, message } = handleFirebaseError(error);
-    res.status(status).json({ error: message });
-  }
-});
 
 // Delete task (PM only)
 router.delete('/:projectId/tasks/:taskId', authenticate, async (req, res) => {
@@ -1927,5 +1373,166 @@ function calculateOnTimeDelivery(tasks) {
 
   return (onTimeTasks.length / completedTasks.length) * 100;
 }
+
+// Отправить приглашение исполнителю в проект
+router.post('/:projectId/send-invitation', authenticate, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { executorId, message } = req.body;
+    const senderId = req.user.uid;
+
+    // Проверяем, что отправитель - PM или админ
+    if (!req.user.roles.includes('pm') && !req.user.roles.includes('admin')) {
+      return res.status(403).json({ error: 'Только проект-менеджеры могут отправлять приглашения' });
+    }
+
+    // Получаем информацию о проекте
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      return res.status(404).json({ error: 'Проект не найден' });
+    }
+
+    const projectData = projectDoc.data();
+
+    // Проверяем, что пользователь - PM этого проекта или админ
+    const isPM = projectData.pmId === senderId || projectData.teamLead === senderId || projectData.manager === senderId;
+    const isAdmin = req.user.roles.includes('admin');
+
+    if (!isPM && !isAdmin) {
+      return res.status(403).json({ error: 'Только PM этого проекта может отправлять приглашения' });
+    }
+
+    // Получаем информацию о получателе
+    const userDoc = await db.collection('users').doc(executorId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+
+    const userData = userDoc.data();
+
+    // Проверяем, что получатель - исполнитель
+    if (!userData.roles.includes('executor')) {
+      return res.status(400).json({ error: 'Приглашения можно отправлять только исполнителям' });
+    }
+
+    // Проверяем, нет ли уже активной заявки
+    const existingInvitation = await db.collection('team_invitations')
+      .where('projectId', '==', projectId)
+      .where('userId', '==', executorId)
+      .where('status', '==', 'pending')
+      .get();
+
+    if (!existingInvitation.empty) {
+      return res.status(400).json({ error: 'Приглашение уже отправлено этому пользователю' });
+    }
+
+    // Проверяем, не является ли пользователь уже участником команды
+    if (projectData.teamMembers && projectData.teamMembers.includes(executorId)) {
+      return res.status(400).json({ error: 'Пользователь уже является участником команды' });
+    }
+
+    // Создаем приглашение
+    const invitationId = db.collection('team_invitations').doc().id;
+    const invitation = {
+      id: invitationId,
+      type: 'team_invitation',
+      projectId,
+      projectName: projectData.title || projectData.name,
+      userId: executorId,
+      userName: userData.displayName || userData.fullName,
+      userEmail: userData.email,
+      senderId,
+      senderName: req.user.displayName || req.user.email,
+      message: message || `Приглашение в проект "${projectData.title || projectData.name}"`,
+      status: 'pending',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection('team_invitations').doc(invitationId).set(invitation);
+
+    // Создаем запись в активности проекта
+    await db.collection('projects')
+      .doc(projectId)
+      .collection('activity')
+      .add({
+        type: 'invitation_sent',
+        userId: senderId,
+        details: {
+          invitedUserId: executorId,
+          invitedUserName: userData.displayName || userData.fullName,
+          message: message
+        },
+        timestamp: new Date()
+      });
+
+    res.status(201).json({ 
+      message: 'Приглашение отправлено успешно',
+      invitationId: invitationId 
+    });
+  } catch (error) {
+    console.error('Error sending invitation:', error);
+    const { status, message } = handleFirebaseError(error);
+    res.status(status).json({ error: message });
+  }
+});
+
+// Get project members (for chat creation)
+router.get('/:projectId/members', authenticate, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    // Check if user has access to project
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const project = projectDoc.data();
+    const hasAccess = 
+      project.customerId === req.user.uid ||
+      project.pmId === req.user.uid ||
+      project.teamLead === req.user.uid ||
+      (project.team && project.team.includes(req.user.uid)) ||
+      (project.teamMembers && project.teamMembers.includes(req.user.uid)) ||
+      req.user.roles.includes('admin');
+
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Not authorized to view project members' });
+    }
+
+    const members = [];
+    const memberIds = new Set();
+
+    // Добавляем всех участников проекта
+    if (project.customerId) memberIds.add(project.customerId);
+    if (project.pmId) memberIds.add(project.pmId);
+    if (project.teamLead) memberIds.add(project.teamLead);
+    if (project.team) project.team.forEach(id => memberIds.add(id));
+    if (project.teamMembers) project.teamMembers.forEach(id => memberIds.add(id));
+
+    // Получаем данные пользователей
+    for (const memberId of memberIds) {
+      const userDoc = await db.collection('users').doc(memberId).get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        members.push({
+          id: memberId,
+          name: userData.fullName || userData.displayName || userData.email,
+          fullName: userData.fullName || userData.displayName,
+          displayName: userData.displayName || userData.fullName,
+          email: userData.email,
+          profileImage: userData.profileImage,
+          roles: userData.roles
+        });
+      }
+    }
+
+    res.json(members);
+  } catch (error) {
+    console.error('Get project members error:', error);
+    res.status(500).json({ message: 'Error fetching project members' });
+  }
+});
 
 module.exports = router; 
