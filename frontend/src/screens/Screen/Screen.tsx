@@ -11,6 +11,7 @@ import { StartScreen } from "./StartScreen";
 import { LoginScreen } from "./LoginScreen";
 import { RegisterScreen } from "./RegisterScreen";
 import { CreateProjectScreen } from "./CreateProjectScreen";
+import TeamMemberSearch from "./sections/TeamsView/TeamMemberSearch";
 import { isAuthenticated } from "../../api/auth";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -22,6 +23,7 @@ const SCREENS = {
   REGISTER: "register",
   CREATE_PROJECT: "createProject",
   DASHBOARD: "dashboard",
+  TEAM_MEMBER_SEARCH: "teamMemberSearch",
 } as const;
 type ScreenType = keyof typeof SCREENS;
 
@@ -31,6 +33,7 @@ export const Screen = (): JSX.Element => {
   const [activeView, setActiveView] = React.useState("dashboard");
   const [currentScreen, setCurrentScreen] = React.useState<ScreenType>("START");
   const [isLoading, setIsLoading] = React.useState(true);
+  const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
 
   console.log('Current screen:', currentScreen);
   console.log('Active view:', activeView);
@@ -84,6 +87,16 @@ export const Screen = (): JSX.Element => {
     setCurrentScreen("START");
   };
 
+  const handleTeamMemberSearch = (teamId: string) => {
+    setSelectedTeamId(teamId);
+    setCurrentScreen("TEAM_MEMBER_SEARCH");
+  };
+
+  const handleBackToDashboard = () => {
+    setCurrentScreen("DASHBOARD");
+    setSelectedTeamId(null);
+  };
+
   const renderView = () => {
     console.log('Rendering view:', activeView);
     switch (activeView) {
@@ -91,7 +104,7 @@ export const Screen = (): JSX.Element => {
         console.log('Rendering ProjectsView');
         return <ProjectsView />;
       case "teams":
-        return <TeamsView />;
+        return <TeamsView onTeamMemberSearch={handleTeamMemberSearch} />;
       case "chats":
         return <ChatsView />;
       case "applications":
@@ -125,6 +138,10 @@ export const Screen = (): JSX.Element => {
   if (currentScreen === "CREATE_PROJECT") {
     console.log('Rendering CREATE_PROJECT screen');
     return <CreateProjectScreen onBack={handleBackToStart} onSuccess={handleProjectSuccess} />;
+  }
+  if (currentScreen === "TEAM_MEMBER_SEARCH") {
+    console.log('Rendering TEAM_MEMBER_SEARCH screen');
+    return <TeamMemberSearch teamId={selectedTeamId} onBack={handleBackToDashboard} />;
   }
 
   console.log('Rendering DASHBOARD screen');

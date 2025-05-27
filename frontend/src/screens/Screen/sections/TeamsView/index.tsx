@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '../../../../components/ui/card';
+import { Card } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
-import { Badge } from '../../../../components/ui/badge';
 import { apiClient } from '../../../../api/config';
-import { useAuth } from '../../../../hooks/useAuth';
 import { CreateTeamModal } from './CreateTeamModal';
+import { AddMemberModal } from './AddMemberModal';
+import { ProposalModal } from './ProposalModal';
+import { useAuth } from '../../../../contexts/AuthContext';
 
 interface Team {
   id: string;
@@ -46,7 +47,11 @@ interface TeamDetails {
   members: TeamMember[];
 }
 
-export const TeamsView: React.FC = () => {
+interface TeamsViewProps {
+  onTeamMemberSearch?: (teamId: string) => void;
+}
+
+export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
   const { user } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamDetails | null>(null);
@@ -54,112 +59,94 @@ export const TeamsView: React.FC = () => {
   const [teamLoading, setTeamLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showProposalModal, setShowProposalModal] = useState(false);
 
-  // Загружаем команды
   useEffect(() => {
-    const fetchTeams = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await apiClient.get('/teams');
-        
-        // Преобразуем данные в нужный формат
-        const teamsData = response.data.map((team: any, index: number) => {
-          // Получаем имя команды
-          const teamName = team.title || team.name || `Команда ${index + 1}`;
-          
-          // Получаем участников команды
-          const members = team.teamMembers || team.members || [];
-          
-          // Находим тимлида
-          const teamLead = team.pm || members.find((m: any) => 
-            m.role === 'pm' || m.role === 'lead' || (m.roles && (m.roles.includes('pm') || m.roles.includes('lead')))
-          );
+    fetchTeams();
+  }, []);
 
-          return {
-            id: team.id,
-            name: teamName,
-            description: team.description || 'Описание команды',
-            icon: getTeamIcon(index),
-            color: getTeamColor(index),
-            members: members.map((member: any) => ({
-              ...member,
-              name: member.displayName || member.fullName || member.name || member.email,
-              rating: member.rating || (Math.random() * 2 + 8).toFixed(1),
-              status: Math.random() > 0.3 ? 'online' : 'offline',
-              lastSeen: Math.random() > 0.5 ? `${Math.floor(Math.random() * 60)} мин. назад` : undefined
-            })),
-            projectCount: 1,
-            teamLead: teamLead ? {
-              ...teamLead,
-              name: teamLead.displayName || teamLead.fullName || teamLead.name || teamLead.email,
-              rating: teamLead.rating || '9.8'
-            } : undefined,
-            role: team.role
-          };
-        });
-        
-        setTeams(teamsData);
-      } catch (error: any) {
-        console.error('Error fetching teams:', error);
-        setError('Не удалось загрузить команды');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (user) {
-      fetchTeams();
+  const fetchTeams = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await apiClient.get('/teams');
+      const teamsData = response.data;
+      
+      console.log('Loaded teams:', teamsData);
+      
+      // Преобразуем данные команд
+      const formattedTeams = teamsData.map((team: any, index: number) => ({
+        id: team.id,
+        name: team.name || 'Команда без названия',
+        description: team.description || 'Описание отсутствует',
+        icon: getTeamIcon(index),
+        color: getTeamColor(index),
+        members: team.teamMembers || team.members || [],
+        teamLead: team.teamLead || team.pm || (team.members && team.members[0]) || null,
+        pm: team.pm || null
+      }));
+      
+      setTeams(formattedTeams);
+    } catch (error: any) {
+      console.error('Error fetching teams:', error);
+      setError('Ошибка загрузки команд: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
     }
-  }, [user]);
+  };
 
-  // Получаем иконку для команды
   const getTeamIcon = (index: number) => {
-    const icons = ['📱', '🌐', '📊', '🚀', '💼', '��', '📈', '👥'];
+    const icons = ['🚀', '💻', '🎨', '📱', '⚡', '🔧', '🌟', '🎯', '💡', '🔥'];
     return icons[index % icons.length];
   };
 
-  // Получаем цвет для команды
   const getTeamColor = (index: number) => {
-    const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-gray-500', 'bg-pink-500', 'bg-indigo-500'];
+    const colors = [
+      'bg-gradient-to-br from-blue-500 to-purple-600',
+      'bg-gradient-to-br from-green-500 to-teal-600',
+      'bg-gradient-to-br from-purple-500 to-pink-600',
+      'bg-gradient-to-br from-orange-500 to-red-600',
+      'bg-gradient-to-br from-indigo-500 to-blue-600',
+      'bg-gradient-to-br from-pink-500 to-rose-600',
+      'bg-gradient-to-br from-teal-500 to-cyan-600',
+      'bg-gradient-to-br from-yellow-500 to-orange-600',
+      'bg-gradient-to-br from-red-500 to-pink-600',
+      'bg-gradient-to-br from-cyan-500 to-blue-600'
+    ];
     return colors[index % colors.length];
   };
 
-  // Открываем детали команды
   const handleTeamClick = async (teamId: string) => {
     try {
       setTeamLoading(true);
-      setError(null);
       
-      // Находим команду в локальных данных
-      const team = teams.find(t => t.id === teamId);
-      if (!team) {
-        setError('Команда не найдена');
-        return;
-      }
-
-      // Создаем детали команды
+      // Получаем детальную информацию о команде
+      const response = await apiClient.get(`/teams/${teamId}`);
+      const teamData = response.data;
+      
+      console.log('Team details:', teamData);
+      
       const teamDetails: TeamDetails = {
-        id: team.id,
-        name: team.name,
-        description: team.description,
-        icon: team.icon,
-        color: team.color,
-        teamLead: team.teamLead || {
-          id: 'default',
-          name: 'Не назначен',
+        id: teamData.id,
+        name: teamData.name,
+        description: teamData.description || 'Описание отсутствует',
+        icon: getTeamIcon(0),
+        color: getTeamColor(0),
+        teamLead: teamData.teamLead || teamData.pm || (teamData.members && teamData.members[0]) || {
+          id: 'unknown',
+          name: 'Неизвестно',
           email: '',
-          role: 'pm',
-          rating: '0.0'
+          role: 'pm'
         },
-        members: team.members.filter(m => m.role !== 'pm' && m.role !== 'lead')
+        members: teamData.members || teamData.teamMembers || []
       };
-
+      
       setSelectedTeam(teamDetails);
     } catch (error: any) {
       console.error('Error fetching team details:', error);
-      setError('Не удалось загрузить детали команды');
+      alert('Ошибка загрузки команды: ' + (error.response?.data?.message || error.message));
     } finally {
       setTeamLoading(false);
     }
@@ -171,22 +158,96 @@ export const TeamsView: React.FC = () => {
 
   const handleCreateTeam = async (teamData: any) => {
     try {
-      // Добавляем новую команду в локальный список
-      const newTeam = {
-        ...teamData,
-        id: `team-${Date.now()}`,
-        members: teamData.teamMembers || [],
-        projectCount: 0,
-        teamLead: undefined
-      };
-      
-      setTeams(prevTeams => [...prevTeams, newTeam]);
-      
-      console.log('Создана новая команда:', newTeam);
-    } catch (error) {
-      console.error('Ошибка при создании команды:', error);
-      setError('Не удалось создать команду');
+      await apiClient.post('/teams', teamData);
+      await fetchTeams();
+      setShowCreateModal(false);
+    } catch (error: any) {
+      console.error('Error creating team:', error);
+      throw error;
     }
+  };
+
+  const handleAddMember = async () => {
+    // Обновляем данные команды после добавления участника
+    if (selectedTeam) {
+      await handleTeamClick(selectedTeam.id);
+    }
+  };
+
+  const handleSendProposal = async (proposalData: any) => {
+    try {
+      if (!selectedTeam) return;
+      
+      // Отправляем предложение через API
+      await apiClient.post(`/teams/${selectedTeam.id}/invite`, {
+        ...proposalData,
+        receiverId: user?.uid // ID текущего пользователя как получателя
+      });
+      
+      alert('Предложение отправлено успешно!');
+    } catch (error) {
+      console.error('Error sending proposal:', error);
+      throw error;
+    }
+  };
+
+  // Обработчик кнопки приглашения
+  const handleInviteClick = (e: React.MouseEvent, team: Team) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('🎯 Invite button clicked for team:', team.name);
+    
+    // Если передан обработчик для поиска участников, используем его
+    if (onTeamMemberSearch) {
+      onTeamMemberSearch(team.id);
+      return;
+    }
+    
+    // Иначе используем старую логику с модальным окном
+    const teamDetails: TeamDetails = {
+      id: team.id,
+      name: team.name,
+      description: team.description,
+      icon: team.icon,
+      color: team.color,
+      teamLead: team.teamLead || team.pm || team.members?.[0] || { 
+        id: '', 
+        name: 'Unknown', 
+        email: '', 
+        role: '' 
+      },
+      members: team.members || []
+    };
+    
+    setSelectedTeam(teamDetails);
+    setShowAddMemberModal(true);
+  };
+
+  // Обработчик кнопки предложения
+  const handleProposalClick = (e: React.MouseEvent, team: Team) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('📧 Proposal button clicked for team:', team.name);
+    
+    const teamDetails: TeamDetails = {
+      id: team.id,
+      name: team.name,
+      description: team.description,
+      icon: team.icon,
+      color: team.color,
+      teamLead: team.teamLead || team.pm || team.members?.[0] || { 
+        id: '', 
+        name: 'Unknown', 
+        email: '', 
+        role: '' 
+      },
+      members: team.members || []
+    };
+    
+    setSelectedTeam(teamDetails);
+    setShowProposalModal(true);
   };
 
   const getStatusColor = (status?: string) => {
@@ -273,24 +334,25 @@ export const TeamsView: React.FC = () => {
             <div className="flex items-center gap-3">
               <Button 
                 variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowProposalModal(true);
+                }}
                 className="flex items-center gap-2"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 515.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 919.288 0M15 7a3 3 0 11-6 0 3 3 0 616 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                Выбрать команду
+                📧 Отправить предложение
               </Button>
-              <Button className="flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Добавить в команду
-              </Button>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowAddMemberModal(true);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                ➕ Пригласить в команду
+              </button>
               <Button variant="ghost" className="text-gray-600">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 515.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 919.288 0M15 7a3 3 0 11-6 0 3 3 0 616 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                Удалить участников
+                🗑️ Удалить участников
               </Button>
             </div>
           </div>
@@ -366,12 +428,9 @@ export const TeamsView: React.FC = () => {
                         <div className="flex-1">
                           <h3 className="font-semibold text-gray-900">{member.name}</h3>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className="text-blue-600 font-medium">{member.rating || '8.8'}</span>
-                            <span className="text-gray-600 text-sm">{getRoleLabel(member.role)}</span>
+                            <span className="text-blue-600 font-medium">{member.rating || '9.5'}</span>
+                            <span className="text-gray-600">{getRoleLabel(member.role)}</span>
                           </div>
-                          {member.lastSeen && (
-                            <p className="text-xs text-gray-500 mt-1">был(а) {member.lastSeen}</p>
-                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <Button variant="ghost" size="sm">
@@ -423,18 +482,18 @@ export const TeamsView: React.FC = () => {
 
         {teams.length === 0 ? (
           <div className="text-center py-12">
-            <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 515.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 919.288 0M15 7a3 3 0 11-6 0 3 3 0 616 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
+            <div className="mx-auto h-12 w-12 text-gray-400 mb-4 text-6xl">
+              👥
+            </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Нет команд</h3>
             <p className="text-gray-500">Создайте первую команду для начала работы</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {teams.map((team) => (
               <Card 
                 key={team.id} 
-                className="cursor-pointer hover:shadow-lg transition-all duration-200 p-6"
+                className="cursor-pointer hover:shadow-lg transition-all duration-200 p-6 relative"
                 onClick={() => handleTeamClick(team.id)}
               >
                 <div className="space-y-4">
@@ -490,6 +549,22 @@ export const TeamsView: React.FC = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* Кнопки действий */}
+                  <div className="pt-2 border-t border-gray-100 flex gap-2">
+                    <button
+                      onClick={(e) => handleInviteClick(e, team)}
+                      className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors flex items-center gap-1 flex-1 justify-center font-medium"
+                    >
+                      ➕ ПРИГЛАСИТЬ
+                    </button>
+                    <button
+                      onClick={(e) => handleProposalClick(e, team)}
+                      className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 transition-colors flex items-center gap-1 flex-1 justify-center font-medium"
+                    >
+                      📧 ПРЕДЛОЖИТЬ
+                    </button>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -503,6 +578,34 @@ export const TeamsView: React.FC = () => {
         onClose={() => setShowCreateModal(false)}
         onCreateTeam={handleCreateTeam}
       />
+
+      {/* Модальное окно добавления участника */}
+      {selectedTeam && (
+        <AddMemberModal
+          isOpen={showAddMemberModal}
+          onClose={() => {
+            setShowAddMemberModal(false);
+            // Не сбрасываем selectedTeam, чтобы модалка могла работать
+          }}
+          teamId={selectedTeam.id}
+          onMemberAdded={handleAddMember}
+        />
+      )}
+
+      {/* Модальное окно отправки предложения */}
+      {selectedTeam && (
+        <ProposalModal
+          isOpen={showProposalModal}
+          onClose={() => {
+            setShowProposalModal(false);
+            // Не сбрасываем selectedTeam, чтобы модалка могла работать
+          }}
+          teamId={selectedTeam.id}
+          onProposalSent={() => {
+            console.log('Предложение отправлено');
+          }}
+        />
+      )}
     </div>
   );
 };

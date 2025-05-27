@@ -223,16 +223,20 @@ router.get('/projects/:projectId/chats', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized to view project chats' });
     }
 
+    // Исправленный запрос - сначала получаем все чаты, потом фильтруем
     const chatsSnapshot = await db.collection('projects')
       .doc(projectId)
       .collection('chats')
-      .where('participants', 'array-contains', req.user.uid)
-      .orderBy('updatedAt', 'desc')
       .get();
 
     const chats = [];
     for (const doc of chatsSnapshot.docs) {
       const chat = doc.data();
+      
+      // Фильтруем чаты где пользователь является участником
+      if (!chat.participants || !chat.participants.includes(req.user.uid)) {
+        continue;
+      }
       
       // Get participants details
       const participants = [];
@@ -281,23 +285,43 @@ router.get('/projects/:projectId/chats', authenticate, async (req, res) => {
         };
       }
 
-      // Calculate unread count
-      const unreadMessagesSnapshot = await db.collection('projects')
-        .doc(projectId)
-        .collection('chats')
-        .doc(doc.id)
-        .collection('messages')
-        .where('readBy', 'not-in', [[req.user.uid]])
-        .get();
+      // Calculate unread count - упрощенный подсчет
+      let unreadCount = 0;
+      try {
+        const unreadMessagesSnapshot = await db.collection('projects')
+          .doc(projectId)
+          .collection('chats')
+          .doc(doc.id)
+          .collection('messages')
+          .get();
+        
+        // Считаем непрочитанные сообщения в памяти
+        unreadMessagesSnapshot.docs.forEach(msgDoc => {
+          const msgData = msgDoc.data();
+          if (!msgData.readBy || !msgData.readBy.includes(req.user.uid)) {
+            unreadCount++;
+          }
+        });
+      } catch (error) {
+        console.log('Error counting unread messages:', error);
+        unreadCount = 0;
+      }
 
       chats.push({
         id: doc.id,
         ...chat,
         participants,
         lastMessage,
-        unreadCount: unreadMessagesSnapshot.size
+        unreadCount
       });
     }
+
+    // Сортируем чаты по времени обновления в памяти
+    chats.sort((a, b) => {
+      const aTime = a.updatedAt?.toDate?.() || a.updatedAt || new Date(0);
+      const bTime = b.updatedAt?.toDate?.() || b.updatedAt || new Date(0);
+      return bTime - aTime;
+    });
 
     res.json(chats);
   } catch (error) {

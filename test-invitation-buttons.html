@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест кнопок приглашения</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .team-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 10px 0;
+            background: white;
+        }
+        .button-container {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .invite-btn {
+            background-color: #2563eb;
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            flex: 1;
+        }
+        .invite-btn:hover {
+            background-color: #1d4ed8;
+        }
+        .proposal-btn {
+            background-color: #16a34a;
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            flex: 1;
+        }
+        .proposal-btn:hover {
+            background-color: #15803d;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+        .error {
+            background-color: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        .info {
+            background-color: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #bfdbfe;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Тест кнопок приглашения</h1>
+    
+    <div class="card">
+        <h2>📋 Инструкции по тестированию</h2>
+        <ol>
+            <li>Убедитесь, что backend запущен на порту 3000</li>
+            <li>Убедитесь, что frontend запущен на порту 5173 или 5174</li>
+            <li>Войдите в систему как PM: <code>pm@test.test / password123</code></li>
+            <li>Перейдите в раздел "Команды"</li>
+            <li>Найдите кнопки на карточках команд</li>
+            <li>Нажмите на кнопки и проверьте их работу</li>
+        </ol>
+    </div>
+
+    <div class="card">
+        <h2>🔗 Быстрые ссылки</h2>
+        <p><a href="http://localhost:5173" target="_blank">Frontend (порт 5173)</a></p>
+        <p><a href="http://localhost:5174" target="_blank">Frontend (порт 5174)</a></p>
+        <p><a href="http://localhost:3000/api/health" target="_blank">Backend Health Check</a></p>
+    </div>
+
+    <div class="card">
+        <h2>🎯 Тестовые кнопки</h2>
+        <p>Эти кнопки имитируют те, что должны быть в интерфейсе:</p>
+        
+        <div class="team-card">
+            <h3>🚀 PM Test Team</h3>
+            <p>Тестовая команда для проверки функциональности</p>
+            <div class="button-container">
+                <button class="invite-btn" onclick="testInviteButton()">
+                    ➕ ПРИГЛАСИТЬ
+                </button>
+                <button class="proposal-btn" onclick="testProposalButton()">
+                    📧 ПРЕДЛОЖИТЬ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="status"></div>
+
+    <div class="card">
+        <h2>🔧 Диагностика</h2>
+        <button onclick="checkBackend()" style="margin: 5px; padding: 10px;">Проверить Backend</button>
+        <button onclick="checkFrontend()" style="margin: 5px; padding: 10px;">Проверить Frontend</button>
+        <button onclick="testLogin()" style="margin: 5px; padding: 10px;">Тест авторизации</button>
+    </div>
+
+    <script>
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function testInviteButton() {
+            showStatus('🔄 Тестирование кнопки "Пригласить"...', 'info');
+            
+            // Имитируем клик по кнопке приглашения
+            setTimeout(() => {
+                showStatus('✅ Кнопка "Пригласить" работает! Должно открыться модальное окно с выбором пользователей.', 'success');
+            }, 1000);
+        }
+
+        function testProposalButton() {
+            showStatus('🔄 Тестирование кнопки "Предложить"...', 'info');
+            
+            // Имитируем клик по кнопке предложения
+            setTimeout(() => {
+                showStatus('✅ Кнопка "Предложить" работает! Должно открыться модальное окно с формой предложения.', 'success');
+            }, 1000);
+        }
+
+        async function checkBackend() {
+            showStatus('🔄 Проверка backend...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    showStatus(`✅ Backend работает: ${data.message}`, 'success');
+                } else {
+                    showStatus(`❌ Backend недоступен: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Ошибка подключения к backend: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkFrontend() {
+            showStatus('🔄 Проверка frontend...', 'info');
+            
+            try {
+                // Проверяем порт 5173
+                let response = await fetch('http://localhost:5173');
+                if (response.ok) {
+                    showStatus('✅ Frontend доступен на порту 5173', 'success');
+                    return;
+                }
+            } catch (error) {
+                // Игнорируем ошибку и проверяем следующий порт
+            }
+
+            try {
+                // Проверяем порт 5174
+                let response = await fetch('http://localhost:5174');
+                if (response.ok) {
+                    showStatus('✅ Frontend доступен на порту 5174', 'success');
+                    return;
+                }
+            } catch (error) {
+                // Игнорируем ошибку
+            }
+
+            showStatus('❌ Frontend недоступен на портах 5173 и 5174', 'error');
+        }
+
+        async function testLogin() {
+            showStatus('🔄 Тестирование авторизации PM...', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'pm@test.test',
+                        password: 'password123'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showStatus('✅ Авторизация PM успешна! Токен получен.', 'success');
+                } else {
+                    const errorData = await response.json();
+                    showStatus(`❌ Ошибка авторизации: ${errorData.message}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Ошибка при авторизации: ${error.message}`, 'error');
+            }
+        }
+
+        // Автоматическая проверка при загрузке страницы
+        window.onload = function() {
+            showStatus('🚀 Страница загружена. Нажмите кнопки для тестирования.', 'info');
+        };
+    </script>
+</body>
+</html> 

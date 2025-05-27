@@ -170,28 +170,39 @@ router.post('/team-invitations/:invitationId/respond', authenticate, async (req,
   }
 });
 
-// Получить отправленные заявки на вступление в команду (для PM)
+// Получить заявки на вступление в команду для проекта (для PM)
 router.get('/projects/:projectId/team-invitations', authenticate, async (req, res) => {
   try {
     const { projectId } = req.params;
     const senderId = req.user.uid;
 
-    if (!req.user.roles.includes('pm') && !req.user.roles.includes('pm')) {
+    // Проверяем, что отправитель - PM
+    if (!req.user.roles.includes('pm') && !req.user.roles.includes('admin')) {
       return res.status(403).json({ error: 'Только проект-менеджеры могут просматривать заявки' });
     }
 
+    // Исправленный запрос - убираем составной индекс
     const invitationsSnapshot = await db.collection('team_invitations')
       .where('projectId', '==', projectId)
-      .where('senderId', '==', senderId)
-      .orderBy('createdAt', 'desc')
       .get();
 
     const invitations = [];
     invitationsSnapshot.forEach(doc => {
-      invitations.push({
-        id: doc.id,
-        ...doc.data()
-      });
+      const data = doc.data();
+      // Фильтруем по senderId в памяти, если нужно
+      if (data.senderId === senderId || req.user.roles.includes('admin')) {
+        invitations.push({
+          id: doc.id,
+          ...data
+        });
+      }
+    });
+
+    // Сортируем по времени создания в памяти
+    invitations.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || a.createdAt || new Date(0);
+      const bTime = b.createdAt?.toDate?.() || b.createdAt || new Date(0);
+      return bTime - aTime;
     });
 
     res.json(invitations);

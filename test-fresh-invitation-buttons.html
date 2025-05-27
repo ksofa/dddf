@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест кнопок приглашения - Новая команда</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .team-card {
+            transition: all 0.3s ease;
+        }
+        .team-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .btn-invite {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        }
+        .btn-propose {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-success { background-color: #10b981; }
+        .status-error { background-color: #ef4444; }
+        .status-pending { background-color: #f59e0b; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto">
+            <!-- Заголовок -->
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">🧪 Тест кнопок приглашения</h1>
+                <p class="text-gray-600">Тестирование функциональности приглашений с новой командой</p>
+            </div>
+
+            <!-- Статус подключения -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">📡 Статус подключения</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="text-center">
+                        <div id="backend-status" class="status-indicator status-pending"></div>
+                        <span>Backend API</span>
+                        <div id="backend-url" class="text-sm text-gray-500">http://localhost:3000</div>
+                    </div>
+                    <div class="text-center">
+                        <div id="frontend-status" class="status-indicator status-pending"></div>
+                        <span>Frontend</span>
+                        <div id="frontend-url" class="text-sm text-gray-500">http://localhost:5173</div>
+                    </div>
+                    <div class="text-center">
+                        <div id="auth-status" class="status-indicator status-pending"></div>
+                        <span>Авторизация PM</span>
+                        <div id="auth-info" class="text-sm text-gray-500">pm@test.test</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Кнопки управления -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">🎮 Управление</h2>
+                <div class="flex flex-wrap gap-3">
+                    <button id="login-btn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
+                        🔑 Войти как PM
+                    </button>
+                    <button id="load-teams-btn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors">
+                        👥 Загрузить команды
+                    </button>
+                    <button id="test-invite-btn" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition-colors">
+                        📧 Тест приглашения
+                    </button>
+                    <button id="clear-log-btn" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700 transition-colors">
+                        🗑️ Очистить лог
+                    </button>
+                </div>
+            </div>
+
+            <!-- Команды -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">👥 Команды PM</h2>
+                <div id="teams-container" class="space-y-4">
+                    <div class="text-center text-gray-500 py-8">
+                        Нажмите "Загрузить команды" для отображения
+                    </div>
+                </div>
+            </div>
+
+            <!-- Лог -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-xl font-semibold mb-4">📋 Лог операций</h2>
+                <div id="log-container" class="bg-gray-100 rounded p-4 h-64 overflow-y-auto font-mono text-sm">
+                    <div class="text-gray-500">Лог операций будет отображаться здесь...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let authToken = null;
+        let currentTeams = [];
+
+        // Утилиты для логирования
+        function log(message, type = 'info') {
+            const container = document.getElementById('log-container');
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                info: 'text-blue-600',
+                success: 'text-green-600',
+                error: 'text-red-600',
+                warning: 'text-yellow-600'
+            };
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = `mb-1 ${colors[type] || colors.info}`;
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            
+            container.appendChild(logEntry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function updateStatus(elementId, status) {
+            const element = document.getElementById(elementId);
+            element.className = `status-indicator status-${status}`;
+        }
+
+        // Проверка подключений
+        async function checkConnections() {
+            log('🔍 Проверка подключений...');
+            
+            // Проверка backend
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                if (response.ok) {
+                    updateStatus('backend-status', 'success');
+                    log('✅ Backend API доступен', 'success');
+                } else {
+                    updateStatus('backend-status', 'error');
+                    log('❌ Backend API недоступен', 'error');
+                }
+            } catch (error) {
+                updateStatus('backend-status', 'error');
+                log('❌ Ошибка подключения к Backend API', 'error');
+            }
+
+            // Проверка frontend
+            try {
+                const response = await fetch('http://localhost:5173/');
+                if (response.ok) {
+                    updateStatus('frontend-status', 'success');
+                    log('✅ Frontend доступен', 'success');
+                } else {
+                    updateStatus('frontend-status', 'error');
+                    log('❌ Frontend недоступен', 'error');
+                }
+            } catch (error) {
+                updateStatus('frontend-status', 'error');
+                log('❌ Ошибка подключения к Frontend', 'error');
+            }
+        }
+
+        // Авторизация
+        async function login() {
+            log('🔑 Попытка входа как PM...');
+            try {
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'pm@test.test',
+                        password: 'password123'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.token;
+                    updateStatus('auth-status', 'success');
+                    log('✅ Успешная авторизация PM', 'success');
+                    return true;
+                } else {
+                    const error = await response.text();
+                    updateStatus('auth-status', 'error');
+                    log(`❌ Ошибка авторизации: ${error}`, 'error');
+                    return false;
+                }
+            } catch (error) {
+                updateStatus('auth-status', 'error');
+                log(`❌ Ошибка при авторизации: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        // Загрузка команд
+        async function loadTeams() {
+            if (!authToken) {
+                log('❌ Необходима авторизация', 'error');
+                return;
+            }
+
+            log('👥 Загрузка команд PM...');
+            try {
+                const response = await fetch(`${API_BASE}/teams`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const teams = await response.json();
+                    currentTeams = teams;
+                    log(`✅ Загружено команд: ${teams.length}`, 'success');
+                    renderTeams(teams);
+                } else {
+                    const error = await response.text();
+                    log(`❌ Ошибка загрузки команд: ${error}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Ошибка при загрузке команд: ${error.message}`, 'error');
+            }
+        }
+
+        // Отображение команд
+        function renderTeams(teams) {
+            const container = document.getElementById('teams-container');
+            
+            if (teams.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        Команды не найдены
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = teams.map(team => `
+                <div class="team-card bg-gray-50 rounded-lg p-6 border border-gray-200">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">${team.name}</h3>
+                            <p class="text-gray-600 mb-3">${team.description || 'Описание отсутствует'}</p>
+                            <div class="text-sm text-gray-500">
+                                <div>👤 PM: ${team.pm?.displayName || team.pm?.email || 'Не указан'}</div>
+                                <div>👥 Участников: ${team.members?.length || 0}</div>
+                                <div>🆔 ID: ${team.id}</div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-2 ml-4">
+                            <button 
+                                onclick="testInvitation('${team.id}')" 
+                                class="btn-invite text-white px-4 py-2 rounded text-sm hover:opacity-90 transition-opacity"
+                            >
+                                ➕ ПРИГЛАСИТЬ
+                            </button>
+                            <button 
+                                onclick="testProposal('${team.id}')" 
+                                class="btn-propose text-white px-4 py-2 rounded text-sm hover:opacity-90 transition-opacity"
+                            >
+                                📧 ПРЕДЛОЖИТЬ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Тест приглашения
+        async function testInvitation(teamId) {
+            if (!authToken) {
+                log('❌ Необходима авторизация', 'error');
+                return;
+            }
+
+            log(`📧 Тест приглашения для команды ${teamId}...`);
+            
+            try {
+                // Сначала получаем доступных пользователей
+                const usersResponse = await fetch(`${API_BASE}/teams/${teamId}/available-users`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (!usersResponse.ok) {
+                    const error = await usersResponse.text();
+                    log(`❌ Ошибка получения пользователей: ${error}`, 'error');
+                    return;
+                }
+
+                const users = await usersResponse.json();
+                log(`✅ Найдено доступных пользователей: ${users.length}`, 'success');
+
+                if (users.length === 0) {
+                    log('❌ Нет доступных пользователей для приглашения', 'error');
+                    return;
+                }
+
+                // Приглашаем первого пользователя
+                const userToInvite = users[0];
+                log(`👤 Приглашаем: ${userToInvite.displayName || userToInvite.email}`);
+
+                const inviteResponse = await fetch(`${API_BASE}/teams/${teamId}/invite`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        receiverId: userToInvite.id,
+                        role: 'developer',
+                        projectType: 'without_project',
+                        coverLetter: 'Тестовое приглашение через веб-интерфейс'
+                    })
+                });
+
+                if (inviteResponse.ok) {
+                    const result = await inviteResponse.json();
+                    log(`✅ Приглашение отправлено! ID: ${result.invitationId}`, 'success');
+                } else {
+                    const error = await inviteResponse.text();
+                    log(`❌ Ошибка отправки приглашения: ${error}`, 'error');
+                }
+
+            } catch (error) {
+                log(`❌ Ошибка при тестировании приглашения: ${error.message}`, 'error');
+            }
+        }
+
+        // Тест предложения
+        async function testProposal(teamId) {
+            log(`📧 Тест предложения для команды ${teamId}...`, 'warning');
+            log('ℹ️ Функция предложения в разработке', 'warning');
+        }
+
+        // Очистка лога
+        function clearLog() {
+            document.getElementById('log-container').innerHTML = '<div class="text-gray-500">Лог очищен...</div>';
+        }
+
+        // Обработчики событий
+        document.getElementById('login-btn').addEventListener('click', login);
+        document.getElementById('load-teams-btn').addEventListener('click', loadTeams);
+        document.getElementById('test-invite-btn').addEventListener('click', () => {
+            if (currentTeams.length > 0) {
+                testInvitation(currentTeams[0].id);
+            } else {
+                log('❌ Сначала загрузите команды', 'error');
+            }
+        });
+        document.getElementById('clear-log-btn').addEventListener('click', clearLog);
+
+        // Инициализация
+        window.addEventListener('load', () => {
+            log('🚀 Страница загружена, проверяем подключения...');
+            checkConnections();
+        });
+    </script>
+</body>
+</html> 

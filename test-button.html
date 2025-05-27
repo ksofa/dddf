@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест кнопки</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .test-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .test-button:hover {
+            background-color: #1d4ed8;
+        }
+    </style>
+</head>
+<body>
+    <h1>Тест кнопки "Пригласить в команду"</h1>
+    
+    <p>Если эта кнопка работает, значит проблема в React компоненте:</p>
+    
+    <button class="test-button" onclick="testClick()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+        Пригласить в команду
+    </button>
+    
+    <script>
+        function testClick() {
+            alert('Кнопка работает! Это означает, что проблема в React компоненте.');
+        }
+    </script>
+    
+    <h2>Инструкции для тестирования:</h2>
+    <ol>
+        <li>Откройте этот файл в браузере</li>
+        <li>Нажмите на кнопку выше</li>
+        <li>Если появляется alert - кнопка работает</li>
+        <li>Затем перейдите к React приложению и проверьте кнопку там</li>
+    </ol>
+    
+    <h2>Ссылки для тестирования:</h2>
+    <ul>
+        <li><a href="http://localhost:5174" target="_blank">React приложение (Frontend)</a></li>
+        <li><a href="http://localhost:3000/api/health" target="_blank">Backend API (Health check)</a></li>
+    </ul>
+</body>
+</html> 
