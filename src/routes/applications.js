@@ -6,6 +6,11 @@ const { authenticate } = require('../middleware/auth');
 // Получить заявки в зависимости от роли пользователя
 router.get('/', authenticate, async (req, res) => {
   try {
+    // Отключаем кэширование для админов
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
     const userId = req.user.uid;
     const userDoc = await db.collection('users').doc(userId).get();
     
@@ -35,44 +40,13 @@ router.get('/', authenticate, async (req, res) => {
     const applicationsSnapshot = await applicationsQuery.get();
     const applications = [];
     
+    // Оптимизированная версия - без дополнительных запросов
     for (const doc of applicationsSnapshot.docs) {
       const appData = { id: doc.id, ...doc.data() };
-      
-      // Получаем данные отправителя
-      if (appData.senderId) {
-        const senderDoc = await db.collection('users').doc(appData.senderId).get();
-        if (senderDoc.exists) {
-          appData.sender = { id: senderDoc.id, ...senderDoc.data() };
-        }
-      }
-      
-      // Получаем данные получателя
-      if (appData.receiverId) {
-        const receiverDoc = await db.collection('users').doc(appData.receiverId).get();
-        if (receiverDoc.exists) {
-          appData.receiver = { id: receiverDoc.id, ...receiverDoc.data() };
-        }
-      }
-      
-      // Получаем данные команды
-      if (appData.teamId) {
-        const teamDoc = await db.collection('teams').doc(appData.teamId).get();
-        if (teamDoc.exists) {
-          appData.team = { id: teamDoc.id, ...teamDoc.data() };
-        }
-      }
-      
-      // Получаем данные проекта
-      if (appData.projectId) {
-        const projectDoc = await db.collection('projects').doc(appData.projectId).get();
-        if (projectDoc.exists) {
-          appData.project = { id: projectDoc.id, ...projectDoc.data() };
-        }
-      }
-      
       applications.push(appData);
     }
     
+    console.log(`✅ Applications loaded: ${applications.length} items`);
     res.json(applications);
   } catch (error) {
     console.error('Error getting applications:', error);
@@ -213,6 +187,98 @@ router.post('/:id/assign-pm', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Error assigning PM:', error);
     res.status(500).json({ error: 'Failed to assign PM' });
+  }
+});
+
+// Одобрить заявку и создать проект (только для админа)
+router.post('/:id/approve', authenticate, async (req, res) => {
+  try {
+    const applicationId = req.params.id;
+    const userId = req.user.uid;
+    const { pmId } = req.body;
+    
+    // Проверяем, что пользователь - админ
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists || !userDoc.data().roles.includes('admin')) {
+      return res.status(403).json({ error: 'Only admin can approve applications' });
+    }
+    
+    if (!pmId) {
+      return res.status(400).json({ error: 'PM is required' });
+    }
+    
+    const applicationDoc = await db.collection('applications').doc(applicationId).get();
+    
+    if (!applicationDoc.exists) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    
+    const applicationData = applicationDoc.data();
+    
+    // Проверяем, что заявка еще не обработана
+    if (applicationData.status !== 'pending') {
+      return res.status(400).json({ error: 'Application already processed' });
+    }
+    
+    // Проверяем, что PM существует и имеет роль PM
+    const pmDoc = await db.collection('users').doc(pmId).get();
+    if (!pmDoc.exists || !pmDoc.data().roles.includes('pm')) {
+      return res.status(400).json({ error: 'Invalid PM' });
+    }
+    
+    // Создаем проект на основе заявки
+    const projectData = {
+      title: applicationData.projectTitle || 'Новый проект',
+      description: applicationData.projectDescription || '',
+      status: 'active',
+      pmId: pmId,
+      manager: pmId,
+      customerId: null,
+      customerInfo: {
+        fullName: applicationData.fullName,
+        phone: applicationData.phone,
+        email: applicationData.email
+      },
+      rate: applicationData.rate || 'Договорная',
+      startDate: applicationData.startDate || null,
+      estimatedDuration: applicationData.estimatedDuration || null,
+      coverLetter: applicationData.coverLetter || '',
+      team: [pmId],
+      teamMembers: [pmId],
+      techSpec: applicationData.techSpec || '',
+      createdAt: new Date(),
+      createdFrom: 'application',
+      applicationId: applicationId
+    };
+    
+    const projectRef = await db.collection('projects').add(projectData);
+    
+    // Обновляем заявку
+    await db.collection('applications').doc(applicationId).update({
+      status: 'approved',
+      assignedTeamLead: pmId,
+      projectId: projectRef.id,
+      approvedAt: new Date(),
+      approvedBy: userId
+    });
+    
+    // Создаем уведомление для PM
+    await db.collection('users').doc(pmId).collection('notifications').add({
+      type: 'project_assigned',
+      title: 'Новый проект назначен',
+      message: `Вам назначен проект: ${projectData.title}`,
+      projectId: projectRef.id,
+      read: false,
+      createdAt: new Date()
+    });
+    
+    res.json({ 
+      message: 'Application approved and project created',
+      projectId: projectRef.id
+    });
+  } catch (error) {
+    console.error('Error approving application:', error);
+    res.status(500).json({ error: 'Failed to approve application' });
   }
 });
 

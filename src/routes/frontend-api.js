@@ -266,6 +266,49 @@ router.post('/applications/:applicationId/approve', authenticate, [
   }
 });
 
+// Назначить PM для заявки (только для админа)
+router.post('/applications/:applicationId/assign-pm', authenticate, [
+  body('pmId').notEmpty().isString()
+], async (req, res) => {
+  try {
+    // Проверяем права доступа
+    if (!req.user.roles || !req.user.roles.includes('admin')) {
+      return res.status(403).json({ message: 'Доступ запрещен' });
+    }
+
+    const { applicationId } = req.params;
+    const { pmId } = req.body;
+
+    const applicationDoc = await db.collection('applications').doc(applicationId).get();
+    if (!applicationDoc.exists) {
+      return res.status(404).json({ message: 'Заявка не найдена' });
+    }
+
+    // Проверяем, что PM существует и имеет правильную роль
+    const pmDoc = await db.collection('users').doc(pmId).get();
+    if (!pmDoc.exists) {
+      return res.status(404).json({ message: 'Проект-менеджер не найден' });
+    }
+    
+    const pmData = pmDoc.data();
+    if (!pmData.roles || !pmData.roles.includes('pm')) {
+      return res.status(400).json({ message: 'Пользователь не является проект-менеджером' });
+    }
+
+    // Обновляем заявку
+    await db.collection('applications').doc(applicationId).update({
+      assignedPM: pmId,
+      assignedTeamLead: pmId,
+      updatedAt: new Date()
+    });
+
+    res.json({ message: 'Проект-менеджер назначен успешно' });
+  } catch (error) {
+    console.error('Assign PM error:', error);
+    res.status(500).json({ message: 'Ошибка при назначении проект-менеджера' });
+  }
+});
+
 // Отклонить заявку
 router.post('/applications/:applicationId/reject', authenticate, [
   body('reason').optional().trim()

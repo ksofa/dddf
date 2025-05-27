@@ -68,8 +68,9 @@ export const ApplicationsView = () => {
       const timestamp = new Date().getTime();
       const response = await apiClient.get(`/applications?_t=${timestamp}`, {
         headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       });
       console.log('✅ Applications loaded:', response.data);
@@ -94,7 +95,13 @@ export const ApplicationsView = () => {
   const loadProjectManagers = async () => {
     try {
       console.log('🔄 Loading project managers...');
-      const response = await apiClient.get('/users');
+      const response = await apiClient.get('/users', {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       const pms = response.data.filter((user: User) => user.roles?.includes('pm'));
       console.log('✅ Project managers loaded:', pms.length);
       setProjectManagers(pms);

@@ -1,89 +1,144 @@
-const { db, auth } = require('../src/config/firebase');
-const fetch = require('node-fetch');
+const axios = require('axios');
 
-const API_BASE = 'http://localhost:3000/api';
-
-async function generateAdminToken() {
+async function testAdminApplications() {
+  const baseURL = 'http://localhost:3000/api';
+  
   try {
-    // ID админа из базы данных
-    const adminUid = 'ixClpAfDIoQQR0X8Zja8N7SM4gz2';
-    const customToken = await auth.createCustomToken(adminUid);
-    return customToken;
-  } catch (error) {
-    console.error('Error generating admin token:', error);
-    throw error;
-  }
-}
-
-async function testApplicationsAccess() {
-  try {
-    console.log('🔄 Генерируем токен админа...');
-    const adminToken = await generateAdminToken();
-    console.log('✅ Токен админа сгенерирован');
-
-    console.log('🔄 Тестируем доступ к заявкам...');
-    const response = await fetch(`${API_BASE}/applications`, {
-      method: 'GET',
+    console.log('🔍 Тестирование админской панели заявок...\n');
+    
+    // 1. Проверяем здоровье API
+    console.log('1. Проверка здоровья API...');
+    const healthResponse = await axios.get(`${baseURL}/health`);
+    console.log('✅ API работает:', healthResponse.data.message);
+    
+    // 2. Логинимся как админ
+    console.log('\n2. Авторизация как админ...');
+    const loginResponse = await axios.post(`${baseURL}/auth/login`, {
+      email: 'admin@admin.admin',
+      password: 'admin123'
+    });
+    
+    const adminToken = loginResponse.data.token;
+    console.log('✅ Админ авторизован');
+    
+    // 3. Получаем заявки с отключенным кэшем
+    console.log('\n3. Получение заявок (с отключенным кэшем)...');
+    const applicationsResponse = await axios.get(`${baseURL}/applications`, {
       headers: {
         'Authorization': `Bearer ${adminToken}`,
-        'Content-Type': 'application/json'
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       }
     });
-
-    console.log('📊 Статус ответа:', response.status);
     
-    if (response.ok) {
-      const applications = await response.json();
-      console.log('✅ Заявки успешно получены:', applications.length);
-      console.log('📋 Первые 3 заявки:', applications.slice(0, 3));
+    const applications = applicationsResponse.data;
+    console.log(`✅ Получено ${applications.length} заявок`);
+    
+    // Показываем заявки от клиентов
+    const clientApplications = applications.filter(app => 
+      !app.type || app.type === 'client_request' || app.projectTitle
+    );
+    
+    console.log(`📋 Заявки от клиентов: ${clientApplications.length}`);
+    clientApplications.forEach((app, index) => {
+      console.log(`   ${index + 1}. ${app.projectTitle || 'Без названия'} - ${app.status} (ID: ${app.id})`);
+      console.log(`      Клиент: ${app.fullName || 'Не указан'}`);
+      console.log(`      Email: ${app.email || 'Не указан'}`);
+      console.log(`      Телефон: ${app.phone || 'Не указан'}`);
+      if (app.assignedTeamLead) {
+        console.log(`      Назначен PM: ${app.assignedTeamLead}`);
+      }
+      console.log('');
+    });
+    
+    // 4. Получаем список PM
+    console.log('4. Получение списка проект-менеджеров...');
+    const usersResponse = await axios.get(`${baseURL}/users`, {
+      headers: {
+        'Authorization': `Bearer ${adminToken}`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+    
+    const users = usersResponse.data;
+    const projectManagers = users.filter(user => user.roles && user.roles.includes('pm'));
+    
+    console.log(`✅ Найдено ${projectManagers.length} проект-менеджеров:`);
+    projectManagers.forEach((pm, index) => {
+      console.log(`   ${index + 1}. ${pm.fullName || pm.name} (${pm.email}) - ID: ${pm.id}`);
+    });
+    
+    // 5. Тестируем назначение PM для первой pending заявки
+    const pendingApplications = clientApplications.filter(app => app.status === 'pending' && !app.assignedTeamLead);
+    
+    if (pendingApplications.length > 0 && projectManagers.length > 0) {
+      const testApp = pendingApplications[0];
+      const testPM = projectManagers[0];
+      
+      console.log(`\n5. Тестирование одобрения заявки "${testApp.projectTitle}" с назначением PM "${testPM.fullName}"...`);
+      
+      try {
+        const approveResponse = await axios.post(`${baseURL}/applications/${testApp.id}/approve`, {
+          pmId: testPM.id
+        }, {
+          headers: {
+            'Authorization': `Bearer ${adminToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log('✅ Заявка успешно одобрена:', approveResponse.data.message);
+        if (approveResponse.data.projectId) {
+          console.log(`✅ Создан проект с ID: ${approveResponse.data.projectId}`);
+        }
+        
+      } catch (error) {
+        console.log('❌ Ошибка при одобрении заявки:', error.response?.data?.error || error.message);
+      }
     } else {
-      const error = await response.text();
-      console.log('❌ Ошибка при получении заявок:', error);
+      console.log('\n5. ⚠️  Нет pending заявок или PM для тестирования одобрения');
     }
-
-  } catch (error) {
-    console.error('❌ Ошибка тестирования:', error);
-  }
-}
-
-async function createTestApplication() {
-  try {
-    console.log('🔄 Создаем тестовую заявку...');
     
-    const testApplication = {
-      type: 'client_request',
-      projectTitle: 'Тестовый проект для админа',
-      projectDescription: 'Описание тестового проекта',
-      budget: 100000,
-      deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // через 30 дней
-      status: 'pending',
-      senderId: 'test-client-id',
-      createdAt: new Date(),
-      updatedAt: new Date()
+    // 6. Проверяем обновленный список заявок
+    console.log('\n6. Проверка обновленного списка заявок...');
+    const updatedResponse = await axios.get(`${baseURL}/applications`, {
+      headers: {
+        'Authorization': `Bearer ${adminToken}`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+    
+    const updatedApplications = updatedResponse.data;
+    const updatedClientApps = updatedApplications.filter(app => 
+      !app.type || app.type === 'client_request' || app.projectTitle
+    );
+    
+    console.log('📊 Статистика заявок:');
+    const stats = {
+      pending: updatedClientApps.filter(app => app.status === 'pending').length,
+      approved: updatedClientApps.filter(app => app.status === 'approved').length,
+      rejected: updatedClientApps.filter(app => app.status === 'rejected').length,
+      withPM: updatedClientApps.filter(app => app.assignedTeamLead).length
     };
-
-    const docRef = await db.collection('applications').add(testApplication);
     
-    console.log('✅ Тестовая заявка создана с ID:', docRef.id);
-    return docRef.id;
+    console.log(`   Ожидают: ${stats.pending}`);
+    console.log(`   Одобрены: ${stats.approved}`);
+    console.log(`   Отклонены: ${stats.rejected}`);
+    console.log(`   С назначенным PM: ${stats.withPM}`);
+    
+    console.log('\n✅ Тестирование завершено успешно!');
     
   } catch (error) {
-    console.error('❌ Ошибка создания тестовой заявки:', error);
-    throw error;
+    console.error('❌ Ошибка при тестировании:', error.response?.data || error.message);
+    if (error.response?.status) {
+      console.error(`HTTP статус: ${error.response.status}`);
+    }
   }
 }
 
-async function main() {
-  console.log('🚀 Начинаем тестирование доступа админа к заявкам...\n');
-  
-  // Создаем тестовую заявку
-  await createTestApplication();
-  
-  // Тестируем доступ
-  await testApplicationsAccess();
-  
-  console.log('\n✅ Тестирование завершено');
-  process.exit(0);
-}
-
-main().catch(console.error); 
+testAdminApplications(); 

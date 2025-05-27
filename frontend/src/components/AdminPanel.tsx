@@ -62,7 +62,13 @@ export const AdminPanel: React.FC = () => {
   const loadApplications = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/applications');
+      const response = await apiClient.get('/applications', {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       setApplications(response.data);
     } catch (error) {
       console.error('Error loading applications:', error);

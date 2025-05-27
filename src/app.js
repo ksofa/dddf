@@ -21,7 +21,14 @@ const corsOptions = {
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Cache-Control',
+    'Pragma',
+    'Expires'
+  ]
 };
 
 // Middleware
@@ -45,8 +52,8 @@ app.use('/api', require('./routes/documents'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api', require('./routes/columns'));
 
-// Frontend integration API (должен быть последним для правильной обработки)
-app.use('/api', require('./routes/frontend-api'));
+// Frontend integration API
+app.use('/api/frontend', require('./routes/frontend-api'));
 
 // Test endpoint for frontend connection
 app.get('/api/health', (req, res) => {
