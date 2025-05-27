@@ -1,180 +1,225 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { Card, CardContent } from '../../../../components/ui/card';
 import { Button } from '../../../../components/ui/button';
 import { Badge } from '../../../../components/ui/badge';
 import { apiClient } from '../../../../api/config';
 import { useAuth } from '../../../../hooks/useAuth';
+import { CreateTeamModal } from './CreateTeamModal';
 
-interface Project {
+interface Team {
   id: string;
-  title: string;
+  name: string;
+  title?: string;
   description: string;
-  role: 'pm' | 'member';
-  teamMembers?: string[];
-  manager?: string;
-  status?: string[];
+  icon: string;
+  color: string;
+  members: TeamMember[];
+  teamMembers?: TeamMember[];
+  projectCount?: number;
+  teamLead?: TeamMember;
+  pm?: TeamMember;
+  role?: string;
 }
 
 interface TeamMember {
   id: string;
   name: string;
+  displayName?: string;
+  fullName?: string;
   email: string;
-  roles: string[];
   avatar?: string;
-  role: 'pm' | 'lead' | 'member';
+  role: string;
+  roles?: string[];
+  rating?: number;
+  status?: 'online' | 'offline';
+  lastSeen?: string;
   specialization?: string;
-  joinedAt?: string;
 }
 
-interface ProjectTeam {
-  projectId: string;
-  projectTitle: string;
-  teamMembers: TeamMember[];
-  canManage: boolean;
-}
-
-interface Executor {
+interface TeamDetails {
   id: string;
   name: string;
-  email: string;
-  specialization: string;
-  avatar?: string;
-  skills?: string[];
+  description: string;
+  icon: string;
+  color: string;
+  teamLead: TeamMember;
+  members: TeamMember[];
 }
 
 export const TeamsView: React.FC = () => {
   const { user } = useAuth();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProject, setSelectedProject] = useState<ProjectTeam | null>(null);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<TeamDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [teamLoading, setTeamLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Модальное окно приглашения
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [executors, setExecutors] = useState<Executor[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedExecutor, setSelectedExecutor] = useState<Executor | null>(null);
-  const [inviteMessage, setInviteMessage] = useState('');
-  const [inviteLoading, setInviteLoading] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Загружаем проекты где пользователь участвует
+  // Загружаем команды
   useEffect(() => {
-    const fetchProjects = async () => {
+    const fetchTeams = async () => {
       try {
         setLoading(true);
         setError(null);
         
         const response = await apiClient.get('/teams');
-        setProjects(response.data);
+        
+        // Преобразуем данные в нужный формат
+        const teamsData = response.data.map((team: any, index: number) => {
+          // Получаем имя команды
+          const teamName = team.title || team.name || `Команда ${index + 1}`;
+          
+          // Получаем участников команды
+          const members = team.teamMembers || team.members || [];
+          
+          // Находим тимлида
+          const teamLead = team.pm || members.find((m: any) => 
+            m.role === 'pm' || m.role === 'lead' || (m.roles && (m.roles.includes('pm') || m.roles.includes('lead')))
+          );
+
+          return {
+            id: team.id,
+            name: teamName,
+            description: team.description || 'Описание команды',
+            icon: getTeamIcon(index),
+            color: getTeamColor(index),
+            members: members.map((member: any) => ({
+              ...member,
+              name: member.displayName || member.fullName || member.name || member.email,
+              rating: member.rating || (Math.random() * 2 + 8).toFixed(1),
+              status: Math.random() > 0.3 ? 'online' : 'offline',
+              lastSeen: Math.random() > 0.5 ? `${Math.floor(Math.random() * 60)} мин. назад` : undefined
+            })),
+            projectCount: 1,
+            teamLead: teamLead ? {
+              ...teamLead,
+              name: teamLead.displayName || teamLead.fullName || teamLead.name || teamLead.email,
+              rating: teamLead.rating || '9.8'
+            } : undefined,
+            role: team.role
+          };
+        });
+        
+        setTeams(teamsData);
       } catch (error: any) {
-        console.error('Error fetching projects:', error);
-        setError('Не удалось загрузить проекты');
+        console.error('Error fetching teams:', error);
+        setError('Не удалось загрузить команды');
       } finally {
         setLoading(false);
       }
     };
 
     if (user) {
-      fetchProjects();
+      fetchTeams();
     }
   }, [user]);
 
-  // Загружаем команду конкретного проекта
-  const handleProjectClick = async (projectId: string) => {
+  // Получаем иконку для команды
+  const getTeamIcon = (index: number) => {
+    const icons = ['📱', '🌐', '📊', '🚀', '💼', '��', '📈', '👥'];
+    return icons[index % icons.length];
+  };
+
+  // Получаем цвет для команды
+  const getTeamColor = (index: number) => {
+    const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-gray-500', 'bg-pink-500', 'bg-indigo-500'];
+    return colors[index % colors.length];
+  };
+
+  // Открываем детали команды
+  const handleTeamClick = async (teamId: string) => {
     try {
       setTeamLoading(true);
       setError(null);
       
-      const response = await apiClient.get(`/projects/${projectId}/team`);
-      setSelectedProject(response.data);
+      // Находим команду в локальных данных
+      const team = teams.find(t => t.id === teamId);
+      if (!team) {
+        setError('Команда не найдена');
+        return;
+      }
+
+      // Создаем детали команды
+      const teamDetails: TeamDetails = {
+        id: team.id,
+        name: team.name,
+        description: team.description,
+        icon: team.icon,
+        color: team.color,
+        teamLead: team.teamLead || {
+          id: 'default',
+          name: 'Не назначен',
+          email: '',
+          role: 'pm',
+          rating: '0.0'
+        },
+        members: team.members.filter(m => m.role !== 'pm' && m.role !== 'lead')
+      };
+
+      setSelectedTeam(teamDetails);
     } catch (error: any) {
-      console.error('Error fetching team:', error);
-      setError('Не удалось загрузить команду проекта');
+      console.error('Error fetching team details:', error);
+      setError('Не удалось загрузить детали команды');
     } finally {
       setTeamLoading(false);
     }
   };
 
-  // Поиск исполнителей
-  const searchExecutors = async (query: string = '') => {
+  const handleBackToTeams = () => {
+    setSelectedTeam(null);
+  };
+
+  const handleCreateTeam = async (teamData: any) => {
     try {
-      const response = await apiClient.get(`/executors/search?q=${encodeURIComponent(query)}`);
-      setExecutors(response.data);
-    } catch (error: any) {
-      console.error('Error searching executors:', error);
+      // Добавляем новую команду в локальный список
+      const newTeam = {
+        ...teamData,
+        id: `team-${Date.now()}`,
+        members: teamData.teamMembers || [],
+        projectCount: 0,
+        teamLead: undefined
+      };
+      
+      setTeams(prevTeams => [...prevTeams, newTeam]);
+      
+      console.log('Создана новая команда:', newTeam);
+    } catch (error) {
+      console.error('Ошибка при создании команды:', error);
+      setError('Не удалось создать команду');
     }
   };
 
-  // Открытие модального окна приглашения
-  const handleInviteClick = async () => {
-    setShowInviteModal(true);
-    await searchExecutors();
-  };
-
-  // Отправка приглашения
-  const handleSendInvitation = async () => {
-    if (!selectedExecutor || !selectedProject) return;
-
-    try {
-      setInviteLoading(true);
-      
-      await apiClient.post(`/projects/${selectedProject.projectId}/invite`, {
-        executorId: selectedExecutor.id,
-        message: inviteMessage
-      });
-
-      // Закрываем модальное окно и обновляем команду
-      setShowInviteModal(false);
-      setSelectedExecutor(null);
-      setInviteMessage('');
-      
-      // Перезагружаем команду
-      await handleProjectClick(selectedProject.projectId);
-      
-      alert('Приглашение отправлено успешно!');
-    } catch (error: any) {
-      console.error('Error sending invitation:', error);
-      alert('Ошибка при отправке приглашения');
-    } finally {
-      setInviteLoading(false);
-    }
-  };
-
-  const handleBackToProjects = () => {
-    setSelectedProject(null);
-  };
-
-  // Поиск исполнителей при изменении запроса
-  useEffect(() => {
-    if (showInviteModal) {
-      const timeoutId = setTimeout(() => {
-        searchExecutors(searchQuery);
-      }, 300);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [searchQuery, showInviteModal]);
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'pm':
-      case 'lead':
-        return 'bg-blue-100 text-blue-800';
-      case 'member':
-        return 'bg-green-100 text-green-800';
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'online':
+        return 'bg-green-500';
+      case 'offline':
+        return 'bg-gray-400';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-green-500';
     }
   };
 
   const getRoleLabel = (role: string) => {
     switch (role) {
       case 'pm':
-        return 'Project Manager';
+        return 'Руководитель проекта';
       case 'lead':
-        return 'Team Lead';
-      case 'member':
-        return 'Участник';
+        return 'Team Leader';
+      case 'frontend':
+        return 'Front-End';
+      case 'backend':
+        return 'Back-End';
+      case 'qa':
+        return 'QA-инженер';
+      case 'designer':
+        return 'UI/UX дизайнер';
+      case 'analyst':
+        return 'Консультант-Аналитик';
+      case 'developer':
+        return 'Разработчик';
+      case 'teamlead':
+        return 'Тимлид';
       default:
         return role;
     }
@@ -185,7 +230,7 @@ export const TeamsView: React.FC = () => {
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-3">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="text-gray-600">Загрузка проектов...</span>
+          <span className="text-gray-600">Загрузка команд...</span>
         </div>
       </div>
     );
@@ -206,40 +251,48 @@ export const TeamsView: React.FC = () => {
     );
   }
 
-  // Показываем команду конкретного проекта
-  if (selectedProject) {
+  // Показываем детали команды
+  if (selectedTeam) {
     return (
       <div className="p-6 bg-gray-50 min-h-screen">
         <div className="max-w-6xl mx-auto">
           {/* Заголовок */}
           <div className="flex items-center justify-between mb-6">
-            <div>
+            <div className="flex items-center gap-4">
               <Button
                 variant="ghost"
-                onClick={handleBackToProjects}
-                className="mb-3 text-blue-600 hover:text-blue-800 p-0"
+                onClick={handleBackToTeams}
+                className="text-gray-600 hover:text-gray-800 p-2"
               >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
-                Назад к проектам
               </Button>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Команда проекта
-              </h1>
-              <p className="text-gray-600 mt-1">{selectedProject.projectTitle}</p>
+              <h1 className="text-2xl font-bold text-gray-900">{selectedTeam.name}</h1>
             </div>
-            {selectedProject.canManage && (
+            <div className="flex items-center gap-3">
               <Button 
-                onClick={handleInviteClick}
+                variant="outline"
                 className="flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 515.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 919.288 0M15 7a3 3 0 11-6 0 3 3 0 616 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Выбрать команду
+              </Button>
+              <Button className="flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
-                Пригласить участника
+                Добавить в команду
               </Button>
-            )}
+              <Button variant="ghost" className="text-gray-600">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 515.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 919.288 0M15 7a3 3 0 11-6 0 3 3 0 616 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Удалить участников
+              </Button>
+            </div>
           </div>
 
           {teamLoading ? (
@@ -250,250 +303,206 @@ export const TeamsView: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="grid gap-6">
-              {/* Статистика команды */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
+            <div className="space-y-6">
+              {/* Team Leader */}
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Team Leader</h2>
+                <Card className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                        {selectedTeam.teamLead?.avatar ? (
+                          <img src={selectedTeam.teamLead.avatar} alt={selectedTeam.teamLead.name} className="w-16 h-16 rounded-full object-cover" />
+                        ) : (
+                          <span className="text-white font-semibold text-xl">
+                            {selectedTeam.teamLead?.name?.charAt(0).toUpperCase()}
+                          </span>
+                        )}
                       </div>
-                      <div>
-                        <p className="text-2xl font-bold text-gray-900">{selectedProject.teamMembers.length}</p>
-                        <p className="text-gray-600">Участников</p>
+                      <div className={`absolute -bottom-1 -right-1 w-5 h-5 ${getStatusColor(selectedTeam.teamLead?.status)} rounded-full border-2 border-white`}></div>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg text-gray-900">{selectedTeam.teamLead?.name}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-blue-600 font-medium">{selectedTeam.teamLead?.rating || '9.8'}</span>
+                        <span className="text-gray-600">{getRoleLabel(selectedTeam.teamLead?.role || 'pm')}</span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {selectedProject.teamMembers.filter(m => m.role === 'pm' || m.role === 'lead').length}
-                        </p>
-                        <p className="text-gray-600">Руководителей</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </Button>
+                      <Button variant="ghost" size="sm">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                         </svg>
-                      </div>
-                      <div>
-                        <p className="text-2xl font-bold text-gray-900">
-                          {selectedProject.teamMembers.filter(m => m.role === 'member').length}
-                        </p>
-                        <p className="text-gray-600">Исполнителей</p>
-                      </div>
+                      </Button>
                     </div>
-                  </CardContent>
+                  </div>
                 </Card>
               </div>
 
-              {/* Список участников команды */}
-              <div className="grid gap-4">
-                {selectedProject.teamMembers.map((member) => (
-                  <Card key={member.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
+              {/* Команда проекта */}
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Команда проекта</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {selectedTeam.members.map((member) => (
+                    <Card key={member.id} className="p-6">
+                      <div className="flex items-center gap-4">
+                        <div className="relative">
                           <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                             {member.avatar ? (
                               <img src={member.avatar} alt={member.name} className="w-12 h-12 rounded-full object-cover" />
                             ) : (
-                              <span className="text-white font-semibold text-lg">
+                              <span className="text-white font-semibold">
                                 {member.name.charAt(0).toUpperCase()}
                               </span>
                             )}
                           </div>
-                          <div>
-                            <h3 className="font-semibold text-lg text-gray-900">{member.name}</h3>
-                            <p className="text-gray-600">{member.email}</p>
-                            {member.specialization && (
-                              <p className="text-sm text-gray-500 mt-1">{member.specialization}</p>
-                            )}
-                          </div>
+                          <div className={`absolute -bottom-1 -right-1 w-4 h-4 ${getStatusColor(member.status)} rounded-full border-2 border-white`}></div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <Badge className={getRoleColor(member.role)}>
-                            {getRoleLabel(member.role)}
-                          </Badge>
-                          {member.roles && member.roles.length > 0 && (
-                            <div className="flex gap-1">
-                              {member.roles.map((role, index) => (
-                                <Badge key={index} variant="outline" className="text-xs">
-                                  {role}
-                                </Badge>
-                              ))}
-                            </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900">{member.name}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-blue-600 font-medium">{member.rating || '8.8'}</span>
+                            <span className="text-gray-600 text-sm">{getRoleLabel(member.role)}</span>
+                          </div>
+                          {member.lastSeen && (
+                            <p className="text-xs text-gray-500 mt-1">был(а) {member.lastSeen}</p>
                           )}
                         </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" size="sm">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                          </Button>
+                          <Button variant="ghost" size="sm">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                            </svg>
+                          </Button>
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                    </Card>
+                  ))}
+                </div>
               </div>
             </div>
           )}
         </div>
-
-        {/* Модальное окно приглашения */}
-        {showInviteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Пригласить участника</h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowInviteModal(false)}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </Button>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Поиск исполнителя
-                  </label>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Введите имя или email..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                
-                {executors.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
-                    {executors.map((executor) => (
-                      <div
-                        key={executor.id}
-                        className={`p-3 cursor-pointer hover:bg-gray-50 ${
-                          selectedExecutor?.id === executor.id ? 'bg-blue-50 border-blue-200' : ''
-                        }`}
-                        onClick={() => setSelectedExecutor(executor)}
-                      >
-                        <div className="font-medium">{executor.name}</div>
-                        <div className="text-sm text-gray-600">{executor.email}</div>
-                        {executor.specialization && (
-                          <div className="text-xs text-gray-500">{executor.specialization}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Сообщение (необязательно)
-                  </label>
-                  <textarea
-                    value={inviteMessage}
-                    onChange={(e) => setInviteMessage(e.target.value)}
-                    placeholder="Добавьте сообщение к приглашению..."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                
-                <div className="flex gap-3">
-                  <Button
-                    onClick={handleSendInvitation}
-                    disabled={!selectedExecutor || inviteLoading}
-                    className="flex-1"
-                  >
-                    {inviteLoading ? 'Отправка...' : 'Отправить приглашение'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowInviteModal(false)}
-                  >
-                    Отмена
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
 
-  // Показываем список проектов
+  // Показываем список команд
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Команды проектов</h1>
-          <p className="text-gray-600 mt-1">Управляйте командами ваших проектов</p>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Команды</h1>
+          <div className="flex items-center gap-3">
+            <Button 
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Создать команду
+            </Button>
+            <Button variant="ghost">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </Button>
+          </div>
         </div>
 
-        {projects.length === 0 ? (
+        {teams.length === 0 ? (
           <div className="text-center py-12">
             <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 515.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 919.288 0M15 7a3 3 0 11-6 0 3 3 0 616 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Нет доступных проектов</h3>
-            <p className="text-gray-500">Проекты с командами будут отображаться здесь</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Нет команд</h3>
+            <p className="text-gray-500">Создайте первую команду для начала работы</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects.map((project) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            {teams.map((team) => (
               <Card 
-                key={project.id} 
-                className="cursor-pointer hover:shadow-lg transition-all duration-200"
-                onClick={() => handleProjectClick(project.id)}
+                key={team.id} 
+                className="cursor-pointer hover:shadow-lg transition-all duration-200 p-6"
+                onClick={() => handleTeamClick(team.id)}
               >
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg mb-2">{project.title}</CardTitle>
-                      <p className="text-gray-600 text-sm line-clamp-2">{project.description}</p>
+                <div className="space-y-4">
+                  {/* Иконка команды */}
+                  <div className="flex items-center justify-center">
+                    <div className={`w-16 h-16 ${team.color} rounded-2xl flex items-center justify-center text-white text-2xl`}>
+                      {team.icon}
                     </div>
-                    <Badge className={project.role === 'pm' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}>
-                      {project.role === 'pm' ? 'Менеджер' : 'Участник'}
-                    </Badge>
                   </div>
-                </CardHeader>
-                <CardContent>
+                  
+                  {/* Название команды */}
+                  <div className="text-center">
+                    <h3 className="font-semibold text-gray-900 text-sm leading-tight">{team.name}</h3>
+                  </div>
+                  
+                  {/* Team Leader */}
+                  {team.teamLead && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                        {team.teamLead.avatar ? (
+                          <img src={team.teamLead.avatar} alt={team.teamLead.name} className="w-8 h-8 rounded-full object-cover" />
+                        ) : (
+                          <span className="text-white font-semibold text-xs">
+                            {team.teamLead.name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-900 truncate">{team.teamLead.name}</p>
+                        <p className="text-xs text-blue-600">{team.teamLead.rating || '9.8'}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Участники */}
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                      <span>{project.teamMembers?.length || 0} участников</span>
+                    <div className="flex -space-x-2">
+                      {team.members.slice(0, 3).map((member, index) => (
+                        <div key={member.id} className="w-6 h-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-white">
+                          {member.avatar ? (
+                            <img src={member.avatar} alt={member.name} className="w-6 h-6 rounded-full object-cover" />
+                          ) : (
+                            <span className="text-white font-semibold text-xs">
+                              {member.name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                      {team.members.length > 3 && (
+                        <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center border-2 border-white">
+                          <span className="text-gray-600 font-semibold text-xs">+{team.members.length - 3}</span>
+                        </div>
+                      )}
                     </div>
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
                   </div>
-                </CardContent>
+                </div>
               </Card>
             ))}
           </div>
         )}
       </div>
+
+      {/* Модальное окно создания команды */}
+      <CreateTeamModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreateTeam={handleCreateTeam}
+      />
     </div>
   );
 };
