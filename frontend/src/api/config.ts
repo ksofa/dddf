@@ -7,6 +7,7 @@ export { API_BASE_URL };
 
 // Axios instance configuration
 import axios from 'axios';
+import { auth } from '../config/firebase';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -19,10 +20,39 @@ export const apiClient = axios.create({
 // Export as 'api' for convenience
 export const api = apiClient;
 
+// Функция для получения свежего токена
+const getValidToken = async (): Promise<string | null> => {
+  try {
+    // Сначала пробуем получить токен из localStorage
+    const storedToken = localStorage.getItem('authToken');
+    
+    // Если есть текущий пользователь Firebase, получаем свежий токен
+    if (auth.currentUser) {
+      console.log('🔄 Обновляем токен через Firebase...');
+      const freshToken = await auth.currentUser.getIdToken(true); // force refresh
+      localStorage.setItem('authToken', freshToken);
+      console.log('✅ Токен обновлен');
+      return freshToken;
+    }
+    
+    // Иначе используем сохраненный токен
+    if (storedToken) {
+      console.log('🔑 Используем сохраненный токен');
+      return storedToken;
+    }
+    
+    console.log('❌ Токен не найден');
+    return null;
+  } catch (error) {
+    console.error('❌ Ошибка получения токена:', error);
+    return localStorage.getItem('authToken');
+  }
+};
+
 // Request interceptor to add auth token
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('authToken');
+  async (config) => {
+    const token = await getValidToken();
     console.log('API Request:', config.method?.toUpperCase(), config.url);
     console.log('Auth token:', token ? 'Present' : 'Missing');
     if (token) {
@@ -41,14 +71,31 @@ apiClient.interceptors.response.use(
     console.log('API Response:', response.status, response.config.url);
     return response;
   },
-  (error) => {
+  async (error) => {
     console.error('API Error:', error.response?.status, error.response?.data, error.config?.url);
-    if (error.response?.status === 401) {
-      // Token expired or invalid
+    
+    // Если получили 401, пробуем обновить токен и повторить запрос
+    if (error.response?.status === 401 && !error.config._retry) {
+      console.log('🔄 Получили 401, пробуем обновить токен...');
+      error.config._retry = true;
+      
+      try {
+        const freshToken = await getValidToken();
+        if (freshToken) {
+          error.config.headers.Authorization = `Bearer ${freshToken}`;
+          console.log('🔄 Повторяем запрос с новым токеном...');
+          return apiClient.request(error.config);
+        }
+      } catch (refreshError) {
+        console.error('❌ Не удалось обновить токен:', refreshError);
+      }
+      
+      // Если не удалось обновить токен, очищаем авторизацию
       localStorage.removeItem('authToken');
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
+    
     return Promise.reject(error);
   }
 ); 

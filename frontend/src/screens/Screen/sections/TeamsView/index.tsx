@@ -4,7 +4,6 @@ import { Button } from '../../../../components/ui/button';
 import { apiClient } from '../../../../api/config';
 import { CreateTeamModal } from './CreateTeamModal';
 import { AddMemberModal } from './AddMemberModal';
-import { ProposalModal } from './ProposalModal';
 import { useAuth } from '../../../../contexts/AuthContext';
 
 interface Team {
@@ -43,7 +42,7 @@ interface TeamDetails {
   description: string;
   icon: string;
   color: string;
-  teamLead: TeamMember;
+  teamLead: TeamMember | null;
   members: TeamMember[];
 }
 
@@ -60,7 +59,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-  const [showProposalModal, setShowProposalModal] = useState(false);
 
   useEffect(() => {
     fetchTeams();
@@ -134,12 +132,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
         description: teamData.description || 'Описание отсутствует',
         icon: getTeamIcon(0),
         color: getTeamColor(0),
-        teamLead: teamData.teamLead || teamData.pm || (teamData.members && teamData.members[0]) || {
-          id: 'unknown',
-          name: 'Неизвестно',
-          email: '',
-          role: 'pm'
-        },
+        teamLead: teamData.teamLead || teamData.pm || (teamData.members && teamData.members[0]) || null,
         members: teamData.members || teamData.teamMembers || []
       };
       
@@ -174,23 +167,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
     }
   };
 
-  const handleSendProposal = async (proposalData: any) => {
-    try {
-      if (!selectedTeam) return;
-      
-      // Отправляем предложение через API
-      await apiClient.post(`/teams/${selectedTeam.id}/invite`, {
-        ...proposalData,
-        receiverId: user?.uid // ID текущего пользователя как получателя
-      });
-      
-      alert('Предложение отправлено успешно!');
-    } catch (error) {
-      console.error('Error sending proposal:', error);
-      throw error;
-    }
-  };
-
   // Обработчик кнопки приглашения
   const handleInviteClick = (e: React.MouseEvent, team: Team) => {
     e.preventDefault();
@@ -222,32 +198,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
     
     setSelectedTeam(teamDetails);
     setShowAddMemberModal(true);
-  };
-
-  // Обработчик кнопки предложения
-  const handleProposalClick = (e: React.MouseEvent, team: Team) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    console.log('📧 Proposal button clicked for team:', team.name);
-    
-    const teamDetails: TeamDetails = {
-      id: team.id,
-      name: team.name,
-      description: team.description,
-      icon: team.icon,
-      color: team.color,
-      teamLead: team.teamLead || team.pm || team.members?.[0] || { 
-        id: '', 
-        name: 'Unknown', 
-        email: '', 
-        role: '' 
-      },
-      members: team.members || []
-    };
-    
-    setSelectedTeam(teamDetails);
-    setShowProposalModal(true);
   };
 
   const getStatusColor = (status?: string) => {
@@ -336,21 +286,12 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                 variant="outline"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setShowProposalModal(true);
+                  setShowAddMemberModal(true);
                 }}
                 className="flex items-center gap-2"
               >
-                📧 Отправить предложение
-              </Button>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowAddMemberModal(true);
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
                 ➕ Пригласить в команду
-              </button>
+              </Button>
               <Button variant="ghost" className="text-gray-600">
                 🗑️ Удалить участников
               </Button>
@@ -370,39 +311,56 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Team Leader</h2>
                 <Card className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="relative">
-                      <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                        {selectedTeam.teamLead?.avatar ? (
-                          <img src={selectedTeam.teamLead.avatar} alt={selectedTeam.teamLead.name} className="w-16 h-16 rounded-full object-cover" />
-                        ) : (
-                          <span className="text-white font-semibold text-xl">
-                            {selectedTeam.teamLead?.name?.charAt(0).toUpperCase()}
-                          </span>
-                        )}
+                  {selectedTeam.teamLead ? (
+                    <div className="flex items-center gap-4">
+                      <div className="relative">
+                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                          {selectedTeam.teamLead.avatar ? (
+                            <img src={selectedTeam.teamLead.avatar} alt={selectedTeam.teamLead.name} className="w-16 h-16 rounded-full object-cover" />
+                          ) : (
+                            <span className="text-white font-semibold text-xl">
+                              {selectedTeam.teamLead.name?.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div className={`absolute -bottom-1 -right-1 w-5 h-5 ${getStatusColor(selectedTeam.teamLead.status)} rounded-full border-2 border-white`}></div>
                       </div>
-                      <div className={`absolute -bottom-1 -right-1 w-5 h-5 ${getStatusColor(selectedTeam.teamLead?.status)} rounded-full border-2 border-white`}></div>
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg text-gray-900">{selectedTeam.teamLead?.name}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-blue-600 font-medium">{selectedTeam.teamLead?.rating || '9.8'}</span>
-                        <span className="text-gray-600">{getRoleLabel(selectedTeam.teamLead?.role || 'pm')}</span>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg text-gray-900">{selectedTeam.teamLead.name}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-blue-600 font-medium">{selectedTeam.teamLead.rating || '9.8'}</span>
+                          <span className="text-gray-600">{getRoleLabel(selectedTeam.teamLead.role || 'pm')}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                        </Button>
+                        <Button variant="ghost" size="sm">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                          </svg>
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                        </svg>
-                      </Button>
+                  ) : (
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 bg-gray-300 rounded-full flex items-center justify-center">
+                        <span className="text-gray-600 font-semibold text-2xl">?</span>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg text-gray-500">Руководитель не назначен</h3>
+                        <p className="text-gray-400 mt-1">Требуется назначение руководителя команды</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="text-blue-600 border-blue-600 hover:bg-blue-50">
+                          Назначить руководителя
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </Card>
               </div>
 
@@ -510,23 +468,35 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                   </div>
                   
                   {/* Team Leader */}
-                  {team.teamLead && (
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                        {team.teamLead.avatar ? (
-                          <img src={team.teamLead.avatar} alt={team.teamLead.name} className="w-8 h-8 rounded-full object-cover" />
-                        ) : (
-                          <span className="text-white font-semibold text-xs">
-                            {team.teamLead.name.charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-900 truncate">{team.teamLead.name}</p>
-                        <p className="text-xs text-blue-600">{team.teamLead.rating || '9.8'}</p>
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {team.teamLead ? (
+                      <>
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                          {team.teamLead.avatar ? (
+                            <img src={team.teamLead.avatar} alt={team.teamLead.name} className="w-8 h-8 rounded-full object-cover" />
+                          ) : (
+                            <span className="text-white font-semibold text-xs">
+                              {team.teamLead.name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-900 truncate">{team.teamLead.name}</p>
+                          <p className="text-xs text-blue-600">{team.teamLead.rating || '9.8'}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                          <span className="text-gray-600 font-semibold text-xs">?</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-500 truncate">Руководитель не назначен</p>
+                          <p className="text-xs text-gray-400">Требуется назначение</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   
                   {/* Участники */}
                   <div className="flex items-center justify-between">
@@ -558,12 +528,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                     >
                       ➕ ПРИГЛАСИТЬ
                     </button>
-                    <button
-                      onClick={(e) => handleProposalClick(e, team)}
-                      className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 transition-colors flex items-center gap-1 flex-1 justify-center font-medium"
-                    >
-                      📧 ПРЕДЛОЖИТЬ
-                    </button>
                   </div>
                 </div>
               </Card>
@@ -589,21 +553,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
           }}
           teamId={selectedTeam.id}
           onMemberAdded={handleAddMember}
-        />
-      )}
-
-      {/* Модальное окно отправки предложения */}
-      {selectedTeam && (
-        <ProposalModal
-          isOpen={showProposalModal}
-          onClose={() => {
-            setShowProposalModal(false);
-            // Не сбрасываем selectedTeam, чтобы модалка могла работать
-          }}
-          teamId={selectedTeam.id}
-          onProposalSent={() => {
-            console.log('Предложение отправлено');
-          }}
         />
       )}
     </div>

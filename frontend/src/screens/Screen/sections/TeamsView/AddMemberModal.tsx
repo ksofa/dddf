@@ -72,23 +72,79 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
       
       console.log('📡 Загружаем доступных пользователей для команды:', teamId);
       
+      // Проверяем токен аутентификации
+      const token = localStorage.getItem('authToken');
+      console.log('🔑 Токен в localStorage:', token ? 'Присутствует' : 'Отсутствует');
+      if (token) {
+        console.log('🔑 Токен (первые 50 символов):', token.substring(0, 50) + '...');
+      }
+      
       // Сначала пробуем специальный эндпоинт для команды
       let response;
+      let usedFallback = false;
+      
       try {
+        console.log('🎯 Пробуем эндпоинт команды:', `/teams/${teamId}/available-users`);
         response = await apiClient.get(`/teams/${teamId}/available-users`);
+        console.log('✅ Эндпоинт команды работает, получено пользователей:', response.data.length);
       } catch (teamError: any) {
-        console.log('⚠️ Эндпоинт команды недоступен, загружаем всех пользователей');
-        // Если эндпоинт команды не работает, загружаем всех пользователей
-        response = await apiClient.get('/users');
+        console.log('⚠️ Эндпоинт команды недоступен:', teamError.response?.status, teamError.response?.data);
+        
+        // Если ошибка 401 (Unauthorized), пробуем подождать и повторить
+        if (teamError.response?.status === 401) {
+          console.log('🔄 Ошибка авторизации, пробуем повторить через 1 секунду...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          try {
+            response = await apiClient.get(`/teams/${teamId}/available-users`);
+            console.log('✅ Повторный запрос успешен, получено пользователей:', response.data.length);
+          } catch (retryError: any) {
+            console.log('❌ Повторный запрос тоже неудачен, используем fallback');
+            usedFallback = true;
+          }
+        } else {
+          usedFallback = true;
+        }
+        
+        // Если все еще не получилось, используем общий эндпоинт
+        if (usedFallback) {
+          console.log('🔄 Пробуем загрузить всех пользователей...');
+          try {
+            response = await apiClient.get('/users');
+            console.log('✅ Загружены все пользователи:', response.data.length);
+          } catch (usersError: any) {
+            console.error('❌ Даже общий эндпоинт пользователей недоступен:', usersError);
+            throw new Error('Не удалось загрузить пользователей. Проверьте авторизацию.');
+          }
+        }
       }
       
       const availableUsers = response.data;
       
       console.log('✅ Загружено пользователей:', availableUsers.length);
+      if (usedFallback) {
+        console.log('ℹ️ Использован fallback на общий эндпоинт пользователей');
+      }
+      
       setUsers(availableUsers);
     } catch (error: any) {
       console.error('❌ Ошибка загрузки пользователей:', error);
-      setError('Ошибка загрузки пользователей: ' + (error.response?.data?.message || error.message));
+      console.error('❌ Статус ошибки:', error.response?.status);
+      console.error('❌ Данные ошибки:', error.response?.data);
+      
+      let errorMessage = 'Ошибка загрузки пользователей';
+      
+      if (error.response?.status === 401) {
+        errorMessage = 'Ошибка авторизации. Попробуйте перезайти в систему.';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Недостаточно прав для просмотра пользователей.';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Команда не найдена.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

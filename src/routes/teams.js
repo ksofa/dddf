@@ -3,6 +3,59 @@ const router = express.Router();
 const { db } = require('../config/firebase');
 const { authenticate } = require('../middleware/auth');
 const admin = require('firebase-admin');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Создаем папку для загрузки файлов, если её нет
+const uploadDir = path.join(__dirname, '../../uploads/tech-specs');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Настройка multer для загрузки файлов ТЗ
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'tech-spec-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    const allowedExtensions = /\.(pdf|doc|docx|txt)$/i;
+    const allowedMimeTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'text/txt'
+    ];
+    
+    const extname = allowedExtensions.test(file.originalname.toLowerCase());
+    const mimetype = allowedMimeTypes.includes(file.mimetype);
+    
+    console.log('File filter check:', {
+      filename: file.originalname,
+      mimetype: file.mimetype,
+      extname,
+      mimetypeMatch: mimetype
+    });
+    
+    if (mimetype || extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Разрешены только файлы PDF, DOC, DOCX, TXT'));
+    }
+  }
+});
 
 // Получить все команды
 router.get('/', authenticate, async (req, res) => {
@@ -73,6 +126,23 @@ router.get('/', authenticate, async (req, res) => {
           teamData.pm = { id: pmDoc.id, ...pmDoc.data() };
           teamData.pmId = teamData.teamLead.uid; // Добавляем для совместимости
         }
+      } else if (teamData.projectId) {
+        // Если нет прямого PM, но есть проект - получаем PM проекта
+        const projectDoc = await db.collection('projects').doc(teamData.projectId).get();
+        if (projectDoc.exists) {
+          const projectData = projectDoc.data();
+          if (projectData.pmId) {
+            const pmDoc = await db.collection('users').doc(projectData.pmId).get();
+            if (pmDoc.exists) {
+              teamData.pm = { id: pmDoc.id, ...pmDoc.data() };
+              teamData.pmId = projectData.pmId; // Добавляем для совместимости
+            }
+          }
+        }
+      } else {
+        // Если нет назначенного PM, создаем заглушку
+        teamData.pm = null;
+        teamData.teamLead = null;
       }
       
       // Получаем данные участников
@@ -129,12 +199,36 @@ router.get('/:id', authenticate, async (req, res) => {
     
     const teamData = { id: teamDoc.id, ...teamDoc.data() };
     
-    // Получаем данные PM
+    // Получаем данные PM (Team Leader)
     if (teamData.pmId) {
       const pmDoc = await db.collection('users').doc(teamData.pmId).get();
       if (pmDoc.exists) {
         teamData.pm = { id: pmDoc.id, ...pmDoc.data() };
       }
+    } else if (teamData.teamLead && teamData.teamLead.uid) {
+      // Если есть teamLead, используем его как PM
+      const pmDoc = await db.collection('users').doc(teamData.teamLead.uid).get();
+      if (pmDoc.exists) {
+        teamData.pm = { id: pmDoc.id, ...pmDoc.data() };
+        teamData.pmId = teamData.teamLead.uid; // Добавляем для совместимости
+      }
+    } else if (teamData.projectId) {
+      // Если нет прямого PM, но есть проект - получаем PM проекта
+      const projectDoc = await db.collection('projects').doc(teamData.projectId).get();
+      if (projectDoc.exists) {
+        const projectData = projectDoc.data();
+        if (projectData.pmId) {
+          const pmDoc = await db.collection('users').doc(projectData.pmId).get();
+          if (pmDoc.exists) {
+            teamData.pm = { id: pmDoc.id, ...pmDoc.data() };
+            teamData.pmId = projectData.pmId; // Добавляем для совместимости
+          }
+        }
+      }
+    } else {
+      // Если нет назначенного PM, создаем заглушку
+      teamData.pm = null;
+      teamData.teamLead = null;
     }
     
     // Получаем данные участников
@@ -228,10 +322,16 @@ router.get('/:id/search-executors', authenticate, async (req, res) => {
   }
 });
 
-// Отправить приглашение в команду
-router.post('/:teamId/invite', authenticate, async (req, res) => {
+// Отправить приглашение в команду (без файла)
+router.post('/:teamId/invite-simple', authenticate, async (req, res) => {
   try {
     const { teamId } = req.params;
+    
+    console.log('=== SENDING SIMPLE TEAM INVITATION ===');
+    console.log('Team ID:', teamId);
+    console.log('Request body:', req.body);
+    console.log('Request user:', req.user);
+    
     const { 
       projectType, 
       rate, 
@@ -242,60 +342,291 @@ router.post('/:teamId/invite', authenticate, async (req, res) => {
       receiverId 
     } = req.body;
 
+    console.log('Extracted fields:');
+    console.log('- Receiver ID:', receiverId);
+    console.log('- Project Type:', projectType);
+    console.log('- Rate:', rate);
+    console.log('- Start Date:', startDate);
+    console.log('- Estimated Duration:', estimatedDuration, estimatedDurationUnit);
+    console.log('- Cover Letter length:', coverLetter ? coverLetter.length : 0);
+
     // Проверяем авторизацию
     if (!req.user) {
+      console.log('❌ No user in request');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    // Валидация receiverId
+    if (!receiverId || receiverId.trim() === '') {
+      console.log('❌ Invalid receiverId:', receiverId);
+      return res.status(400).json({ error: 'Receiver ID is required and cannot be empty' });
+    }
+
     // Получаем команду и проверяем права доступа
+    console.log('📋 Fetching team...');
     const teamDoc = await db.collection('teams').doc(teamId).get();
     if (!teamDoc.exists) {
+      console.log('❌ Team not found');
       return res.status(404).json({ error: 'Team not found' });
     }
 
     const teamData = teamDoc.data();
+    console.log('✅ Team found:', teamData.name);
+    
     const userId = req.user.uid;
     const userRoles = req.user.roles || [];
     const isTeamPM = teamData.pmId === userId;
     const isAdmin = userRoles.includes('admin');
 
+    console.log('🔐 Access check:', { userId, isTeamPM, isAdmin, userRoles });
+
     if (!isAdmin && !isTeamPM) {
+      console.log('❌ Access denied');
       return res.status(403).json({ error: 'Access denied. You can only send invitations from your own teams.' });
     }
 
     // Проверяем, что получатель существует
-    const receiverDoc = await db.collection('users').doc(receiverId).get();
+    console.log('👤 Checking receiver:', receiverId);
+    const receiverDoc = await db.collection('users').doc(receiverId.trim()).get();
     if (!receiverDoc.exists) {
+      console.log('❌ Receiver not found:', receiverId);
       return res.status(400).json({ error: 'Receiver not found' });
     }
 
-    // Создаем приглашение
+    const receiverData = receiverDoc.data();
+    console.log('✅ Receiver found:', receiverData.displayName || receiverData.email);
+
+    // Создаем приглашение с полными данными
     const invitationData = {
       teamId,
+      teamName: teamData.name || 'Команда',
       senderId: req.user.uid,
-      receiverId,
+      senderName: req.user.displayName || req.user.email || 'Отправитель',
+      receiverId: receiverId.trim(),
+      receiverName: receiverData.displayName || receiverData.fullName || receiverData.name || 'Получатель',
+      receiverEmail: receiverData.email,
       projectType: projectType || 'without_project',
       rate: rate || 'Договорная',
       startDate: startDate || null,
       estimatedDuration: estimatedDuration || null,
       estimatedDurationUnit: estimatedDurationUnit || 'months',
       coverLetter: coverLetter || 'Приглашение в команду',
+      techSpecFile: null, // Без файла
       status: 'pending',
       createdAt: new Date(),
       updatedAt: new Date()
     };
 
+    console.log('💾 Saving invitation with data:', JSON.stringify({
+      ...invitationData,
+      coverLetter: invitationData.coverLetter.substring(0, 100) + '...'
+    }, null, 2));
+
     const invitationRef = await db.collection('team_invitations').add(invitationData);
+    console.log('✅ Invitation saved with ID:', invitationRef.id);
+
+    // Создаем уведомление для получателя
+    const notificationData = {
+      userId: receiverId.trim(),
+      type: 'team_invitation',
+      title: 'Новое приглашение в команду',
+      message: `Вас приглашают в команду "${teamData.name || 'команду'}"`,
+      data: {
+        invitationId: invitationRef.id,
+        teamId: teamId,
+        teamName: teamData.name || 'Команда',
+        senderName: req.user.displayName || req.user.email || 'Отправитель',
+        projectType: projectType || 'without_project',
+        rate: rate || 'Договорная',
+        hasFile: false
+      },
+      read: false,
+      createdAt: new Date()
+    };
+
+    console.log('📢 Creating notification...');
+    await db.collection('notifications').add(notificationData);
+    console.log('✅ Notification created');
+
+    console.log('✅ Invitation sent successfully');
 
     res.json({
       success: true,
       invitationId: invitationRef.id,
-      message: 'Приглашение отправлено успешно'
+      message: 'Приглашение отправлено успешно',
+      data: {
+        teamName: teamData.name || 'Команда',
+        receiverName: receiverData.displayName || receiverData.fullName || receiverData.name || 'Получатель',
+        projectType: projectType || 'without_project',
+        rate: rate || 'Договорная',
+        hasFile: false
+      }
     });
 
   } catch (error) {
-    console.error('Error sending team invitation:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('❌ ERROR SENDING SIMPLE TEAM INVITATION:');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Error code:', error.code);
+    res.status(500).json({ error: 'Internal server error: ' + error.message });
+  }
+});
+
+// Отправить приглашение в команду (с файлом)
+router.post('/:teamId/invite', authenticate, upload.single('techSpecFile'), async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    
+    console.log('=== SENDING TEAM INVITATION WITH FILE ===');
+    console.log('Team ID:', teamId);
+    console.log('Request body:', req.body);
+    console.log('Request file:', req.file);
+    console.log('Request user:', req.user);
+    
+    const { 
+      projectType, 
+      rate, 
+      startDate, 
+      estimatedDuration, 
+      estimatedDurationUnit, 
+      coverLetter, 
+      receiverId 
+    } = req.body;
+
+    console.log('Extracted fields:');
+    console.log('- Receiver ID:', receiverId);
+    console.log('- Project Type:', projectType);
+    console.log('- Rate:', rate);
+    console.log('- Start Date:', startDate);
+    console.log('- Estimated Duration:', estimatedDuration, estimatedDurationUnit);
+    console.log('- Cover Letter length:', coverLetter ? coverLetter.length : 0);
+    console.log('- Tech Spec File:', req.file ? req.file.filename : 'No file');
+
+    // Проверяем авторизацию
+    if (!req.user) {
+      console.log('❌ No user in request');
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Валидация receiverId
+    if (!receiverId || receiverId.trim() === '') {
+      console.log('❌ Invalid receiverId:', receiverId);
+      return res.status(400).json({ error: 'Receiver ID is required and cannot be empty' });
+    }
+
+    // Получаем команду и проверяем права доступа
+    console.log('📋 Fetching team...');
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    if (!teamDoc.exists) {
+      console.log('❌ Team not found');
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const teamData = teamDoc.data();
+    console.log('✅ Team found:', teamData.name);
+    
+    const userId = req.user.uid;
+    const userRoles = req.user.roles || [];
+    const isTeamPM = teamData.pmId === userId;
+    const isAdmin = userRoles.includes('admin');
+
+    console.log('🔐 Access check:', { userId, isTeamPM, isAdmin, userRoles });
+
+    if (!isAdmin && !isTeamPM) {
+      console.log('❌ Access denied');
+      return res.status(403).json({ error: 'Access denied. You can only send invitations from your own teams.' });
+    }
+
+    // Проверяем, что получатель существует
+    console.log('👤 Checking receiver:', receiverId);
+    const receiverDoc = await db.collection('users').doc(receiverId.trim()).get();
+    if (!receiverDoc.exists) {
+      console.log('❌ Receiver not found:', receiverId);
+      return res.status(400).json({ error: 'Receiver not found' });
+    }
+
+    const receiverData = receiverDoc.data();
+    console.log('✅ Receiver found:', receiverData.displayName || receiverData.email);
+
+    // Создаем приглашение с полными данными
+    const invitationData = {
+      teamId,
+      teamName: teamData.name || 'Команда',
+      senderId: req.user.uid,
+      senderName: req.user.displayName || req.user.email || 'Отправитель',
+      receiverId: receiverId.trim(),
+      receiverName: receiverData.displayName || receiverData.fullName || receiverData.name || 'Получатель',
+      receiverEmail: receiverData.email,
+      projectType: projectType || 'without_project',
+      rate: rate || 'Договорная',
+      startDate: startDate || null,
+      estimatedDuration: estimatedDuration || null,
+      estimatedDurationUnit: estimatedDurationUnit || 'months',
+      coverLetter: coverLetter || 'Приглашение в команду',
+      techSpecFile: req.file ? {
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        path: req.file.path,
+        mimetype: req.file.mimetype
+      } : null,
+      status: 'pending',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    console.log('💾 Saving invitation with data:', JSON.stringify({
+      ...invitationData,
+      coverLetter: invitationData.coverLetter.substring(0, 100) + '...'
+    }, null, 2));
+
+    const invitationRef = await db.collection('team_invitations').add(invitationData);
+    console.log('✅ Invitation saved with ID:', invitationRef.id);
+
+    // Создаем уведомление для получателя
+    const notificationData = {
+      userId: receiverId.trim(),
+      type: 'team_invitation',
+      title: 'Новое приглашение в команду',
+      message: `Вас приглашают в команду "${teamData.name || 'команду'}"`,
+      data: {
+        invitationId: invitationRef.id,
+        teamId: teamId,
+        teamName: teamData.name || 'Команда',
+        senderName: req.user.displayName || req.user.email || 'Отправитель',
+        projectType: projectType || 'without_project',
+        rate: rate || 'Договорная',
+        hasFile: !!req.file
+      },
+      read: false,
+      createdAt: new Date()
+    };
+
+    console.log('📢 Creating notification...');
+    await db.collection('notifications').add(notificationData);
+    console.log('✅ Notification created');
+
+    console.log('✅ Invitation sent successfully');
+
+    res.json({
+      success: true,
+      invitationId: invitationRef.id,
+      message: 'Приглашение отправлено успешно',
+      data: {
+        teamName: teamData.name || 'Команда',
+        receiverName: receiverData.displayName || receiverData.fullName || receiverData.name || 'Получатель',
+        projectType: projectType || 'without_project',
+        rate: rate || 'Договорная',
+        hasFile: !!req.file
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ ERROR SENDING TEAM INVITATION:');
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Error code:', error.code);
+    res.status(500).json({ error: 'Internal server error: ' + error.message });
   }
 });
 

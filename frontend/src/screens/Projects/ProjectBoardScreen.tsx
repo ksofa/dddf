@@ -1,6 +1,6 @@
 import { DragDropContext, Droppable, Draggable, DropResult, DroppableProvided, DroppableStateSnapshot, DraggableProvided, DraggableStateSnapshot } from "@hello-pangea/dnd";
 import { useEffect, useState } from 'react';
-import { getProjectBoard, createTask, updateTaskStatus, createDefaultScrumBoardWithTasks, getUsers } from '../../api/projects';
+import { getProjectBoard, createTask, updateTaskStatus, createDefaultScrumBoardWithTasks, getUsers, deleteTask, getTaskComments, addTaskComment, deleteTaskComment } from '../../api/projects';
 import React from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { apiClient } from '../../api/config';
@@ -34,6 +34,8 @@ type ProjectBoardScreenProps = {
 type Task = {
   id: string;
   title: string;
+  text?: string;
+  description?: string;
   assignee?: {
     id: string;
     fullName: string;
@@ -56,6 +58,7 @@ type User = {
   displayName: string;
   email: string;
   roles: string[];
+  profileImage?: string;
 };
 
 type NewTaskData = {
@@ -65,6 +68,15 @@ type NewTaskData = {
   priority: 'low' | 'medium' | 'high' | 'critical';
   color: string;
   description: string;
+};
+
+type TaskComment = {
+  id: string;
+  text: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  mentions?: string[];
 };
 
 export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
@@ -87,6 +99,13 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
   const [isProjectPM, setIsProjectPM] = useState(false);
   const [isProjectExecutor, setIsProjectExecutor] = useState(false);
   const [projectData, setProjectData] = useState<any>(null);
+
+  // Состояние для модального окна задачи
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [taskComments, setTaskComments] = useState<TaskComment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [addingComment, setAddingComment] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
@@ -271,6 +290,74 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
     return assignee.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(assignee.fullName)}&background=random`;
   };
 
+  // Функция удаления задачи
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm('Вы уверены, что хотите удалить эту задачу?')) {
+      return;
+    }
+
+    try {
+      await deleteTask(projectId, taskId);
+      await loadBoard(); // Перезагружаем доску
+      setSelectedTask(null); // Закрываем модальное окно если оно открыто
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      setError('Ошибка удаления задачи');
+    }
+  };
+
+  // Функция открытия модального окна задачи
+  const handleOpenTask = async (task: Task) => {
+    setSelectedTask(task);
+    setLoadingComments(true);
+    
+    try {
+      const comments = await getTaskComments(projectId, task.id);
+      setTaskComments(comments);
+    } catch (error) {
+      console.error('Error loading comments:', error);
+      setTaskComments([]);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  // Функция добавления комментария
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !selectedTask) return;
+
+    setAddingComment(true);
+    try {
+      await addTaskComment(projectId, selectedTask.id, newComment.trim());
+      setNewComment('');
+      
+      // Перезагружаем комментарии
+      const comments = await getTaskComments(projectId, selectedTask.id);
+      setTaskComments(comments);
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      setError('Ошибка добавления комментария');
+    } finally {
+      setAddingComment(false);
+    }
+  };
+
+  // Функция удаления комментария
+  const handleDeleteComment = async (commentId: string) => {
+    if (!selectedTask || !window.confirm('Удалить комментарий?')) return;
+
+    try {
+      await deleteTaskComment(projectId, selectedTask.id, commentId);
+      
+      // Перезагружаем комментарии
+      const comments = await getTaskComments(projectId, selectedTask.id);
+      setTaskComments(comments);
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+      setError('Ошибка удаления комментария');
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-[#F6F7F9] min-h-screen flex items-center justify-center">
@@ -364,9 +451,44 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
                                       ...provided.draggableProps.style
                                     }}
                                   >
-                                    {/* Заголовок задачи */}
-                                    <div className="mb-2 font-medium">
-                                      {task.title}
+                                    {/* Заголовок задачи с кнопками действий */}
+                                    <div className="flex items-start justify-between mb-2">
+                                      <div 
+                                        className="font-medium flex-1 cursor-pointer"
+                                        onClick={() => handleOpenTask(task)}
+                                      >
+                                        {task.title || task.text}
+                                      </div>
+                                      
+                                      {isProjectPM && (
+                                        <div className="flex items-center gap-1 ml-2">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenTask(task);
+                                            }}
+                                            className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                            title="Просмотреть задачу"
+                                          >
+                                            <svg width="14" height="14" fill="none" viewBox="0 0 24 24">
+                                              <path stroke="currentColor" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                              <path stroke="currentColor" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeleteTask(task.id);
+                                            }}
+                                            className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                            title="Удалить задачу"
+                                          >
+                                            <svg width="14" height="14" fill="none" viewBox="0 0 24 24">
+                                              <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      )}
                                     </div>
                                     
                                     {/* Приоритет */}
@@ -564,6 +686,192 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
           </DragDropContext>
         </div>
       </div>
+
+      {/* Модальное окно задачи */}
+      {selectedTask && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Заголовок модального окна */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-semibold text-gray-900">
+                {selectedTask.title || selectedTask.text}
+              </h2>
+              <button
+                onClick={() => setSelectedTask(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg width="24" height="24" fill="none" viewBox="0 0 24 24">
+                  <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Содержимое модального окна */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Информация о задаче */}
+              <div className="mb-6">
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  {selectedTask.assignee && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Исполнитель
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <img 
+                          src={getAvatarUrl(selectedTask.assignee)}
+                          alt={selectedTask.assignee.fullName}
+                          className="w-8 h-8 rounded-full"
+                        />
+                        <span className="text-sm text-gray-900">
+                          {selectedTask.assignee.fullName}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedTask.dueDate && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Дедлайн
+                      </label>
+                      <span className={`text-sm ${
+                        new Date(selectedTask.dueDate) < new Date() 
+                          ? 'text-red-600 font-medium' 
+                          : 'text-gray-900'
+                      }`}>
+                        {new Date(selectedTask.dueDate).toLocaleDateString('ru-RU')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {selectedTask.priority && selectedTask.priority !== 'medium' && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Приоритет
+                    </label>
+                    <span 
+                      className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                      style={{
+                        backgroundColor: `${priorityColors[selectedTask.priority]}20`,
+                        color: priorityColors[selectedTask.priority]
+                      }}
+                    >
+                      {selectedTask.priority === 'critical' && '🔥'}
+                      {selectedTask.priority === 'high' && '⚡'}
+                      {selectedTask.priority === 'low' && '📋'}
+                      {priorityLabels[selectedTask.priority]}
+                    </span>
+                  </div>
+                )}
+
+                {(selectedTask.description || selectedTask.text) && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Описание
+                    </label>
+                    <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                      {selectedTask.description || selectedTask.text}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Комментарии */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">
+                  Комментарии ({taskComments.length})
+                </h3>
+
+                {/* Форма добавления комментария */}
+                <div className="mb-6">
+                  <div className="flex gap-3">
+                    <img 
+                      src={user?.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.displayName || 'User')}&background=random`}
+                      alt={user?.displayName || 'User'}
+                      className="w-8 h-8 rounded-full flex-shrink-0"
+                    />
+                    <div className="flex-1">
+                      <textarea
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Добавить комментарий..."
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        rows={3}
+                      />
+                      <div className="flex justify-end mt-2">
+                        <button
+                          onClick={handleAddComment}
+                          disabled={!newComment.trim() || addingComment}
+                          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {addingComment ? 'Добавление...' : 'Добавить комментарий'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Список комментариев */}
+                <div className="space-y-4">
+                  {loadingComments ? (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                    </div>
+                  ) : taskComments.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">
+                      Комментариев пока нет
+                    </p>
+                  ) : (
+                    taskComments.map((comment) => (
+                      <div key={comment.id} className="flex gap-3">
+                        <img 
+                          src={`https://ui-avatars.com/api/?name=${encodeURIComponent(comment.createdBy)}&background=random`}
+                          alt="User"
+                          className="w-8 h-8 rounded-full flex-shrink-0"
+                        />
+                        <div className="flex-1">
+                          <div className="bg-gray-50 rounded-lg px-3 py-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium text-gray-900">
+                                {comment.createdBy}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500">
+                                  {new Date(comment.createdAt).toLocaleDateString('ru-RU', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                                {(comment.createdBy === user?.uid || isProjectPM) && (
+                                  <button
+                                    onClick={() => handleDeleteComment(comment.id)}
+                                    className="text-gray-400 hover:text-red-600 transition-colors"
+                                    title="Удалить комментарий"
+                                  >
+                                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24">
+                                      <path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-sm text-gray-900 whitespace-pre-wrap">
+                              {comment.text}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }; 

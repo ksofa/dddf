@@ -309,25 +309,74 @@ export async function createSpecialistProposal(projectId: string, userId: string
 export async function createDefaultScrumBoardWithTasks(projectId: string) {
   try {
     // Создаем дефолтные колонки если их нет
-    const columns = [
-      { name: "Бэклог", order: 0 },
-      { name: "Нужно сделать", order: 1 },
-      { name: "В работе", order: 2 },
-      { name: "Правки", order: 3 },
-      { name: "Готово", order: 4 },
-    ];
-
-    for (const column of columns) {
-      try {
-        await apiClient.post(`/projects/${projectId}/columns`, column);
-      } catch (error) {
-        // Колонка уже существует, игнорируем ошибку
-        console.log('Column already exists:', column.name);
-      }
-    }
-
-    console.log('Default scrum board created for project:', projectId);
+    const response = await apiClient.post(`/projects/${projectId}/columns`, {
+      name: 'Бэклог',
+      order: 0
+    });
+    console.log('Default scrum board created:', response.data);
   } catch (error) {
-    console.error('Error creating default scrum board:', error);
+    // Игнорируем ошибку если колонки уже существуют
+    console.log('Scrum board already exists or error creating:', error);
+  }
+}
+
+// Удаление задачи
+export async function deleteTask(projectId: string, taskId: string) {
+  try {
+    const response = await apiClient.delete(`/projects/${projectId}/tasks/${taskId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    throw error;
+  }
+}
+
+// Получение комментариев к задаче
+export async function getTaskComments(projectId: string, taskId: string) {
+  try {
+    const response = await apiClient.get(`/projects/${projectId}/tasks/${taskId}/comments`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching task comments:', error);
+    throw error;
+  }
+}
+
+// Добавление комментария к задаче
+export async function addTaskComment(projectId: string, taskId: string, text: string, mentions: string[] = []) {
+  try {
+    const response = await apiClient.post(`/projects/${projectId}/tasks/${taskId}/comments`, {
+      text,
+      mentions
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error adding task comment:', error);
+    throw error;
+  }
+}
+
+// Обновление комментария
+export async function updateTaskComment(projectId: string, taskId: string, commentId: string, text: string, mentions: string[] = []) {
+  try {
+    const response = await apiClient.put(`/projects/${projectId}/tasks/${taskId}/comments/${commentId}`, {
+      text,
+      mentions
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating task comment:', error);
+    throw error;
+  }
+}
+
+// Удаление комментария
+export async function deleteTaskComment(projectId: string, taskId: string, commentId: string) {
+  try {
+    const response = await apiClient.delete(`/projects/${projectId}/tasks/${taskId}/comments/${commentId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting task comment:', error);
+    throw error;
   }
 } 

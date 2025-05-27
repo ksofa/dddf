@@ -36,7 +36,7 @@ export interface AuthResponse {
 // Регистрация пользователя
 export async function registerUser(data: RegisterData): Promise<AuthResponse> {
   // Сначала регистрируем пользователя через backend
-  const response = await apiClient.post('/register', {
+  const response = await apiClient.post('/auth/register', {
     email: data.email,
     password: data.password,
     displayName: data.name,
@@ -62,7 +62,7 @@ export async function registerUser(data: RegisterData): Promise<AuthResponse> {
 // Вход пользователя
 export async function loginUser(email: string, password: string): Promise<AuthResponse> {
   // Сначала логинимся через backend чтобы получить custom token
-  const response = await apiClient.post('/login', { email, password });
+  const response = await apiClient.post('/auth/login', { email, password });
   
   // Получаем custom token от backend
   const customToken = response.data.token;

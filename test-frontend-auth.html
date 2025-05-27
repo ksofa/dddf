@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест аутентификации фронтенда</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .team-card {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f9f9f9;
+        }
+        .user-card {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔐 Тест аутентификации фронтенда</h1>
+    
+    <div class="container">
+        <h2>1. Авторизация</h2>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" value="admin@admin.admin">
+        </div>
+        <div class="form-group">
+            <label for="password">Пароль:</label>
+            <input type="password" id="password" value="admin123">
+        </div>
+        <button onclick="login()">Войти</button>
+        <button onclick="checkToken()">Проверить токен</button>
+        <button onclick="clearAuth()">Очистить авторизацию</button>
+        <div id="authResult"></div>
+    </div>
+
+    <div class="container">
+        <h2>2. Тест API</h2>
+        <button onclick="testTeams()">Загрузить команды</button>
+        <button onclick="testUsers()">Загрузить всех пользователей</button>
+        <button onclick="testAvailableUsers()">Загрузить доступных пользователей</button>
+        <div id="apiResult"></div>
+    </div>
+
+    <div class="container">
+        <h2>3. Команды</h2>
+        <div id="teamsList"></div>
+    </div>
+
+    <div class="container">
+        <h2>4. Доступные пользователи</h2>
+        <div id="usersList"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let currentTeamId = null;
+
+        // Проверяем токен при загрузке
+        window.onload = function() {
+            checkToken();
+        };
+
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="${type}">${message}</div>`;
+        }
+
+        function checkToken() {
+            const token = localStorage.getItem('authToken');
+            const user = localStorage.getItem('user');
+            
+            if (token && user) {
+                const userData = JSON.parse(user);
+                showResult('authResult', `
+                    ✅ Токен найден<br>
+                    👤 Пользователь: ${userData.displayName}<br>
+                    📧 Email: ${userData.email}<br>
+                    🔑 Токен (50 символов): ${token.substring(0, 50)}...<br>
+                    📋 Роли: ${userData.roles.join(', ')}
+                `, 'success');
+            } else {
+                showResult('authResult', '❌ Токен не найден в localStorage', 'error');
+            }
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                showResult('authResult', '🔄 Авторизация...', 'info');
+
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem('authToken', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    showResult('authResult', `
+                        ✅ Успешная авторизация!<br>
+                        👤 Пользователь: ${data.user.displayName}<br>
+                        📧 Email: ${data.user.email}<br>
+                        🔑 Токен сохранен<br>
+                        📋 Роли: ${data.user.roles.join(', ')}
+                    `, 'success');
+                } else {
+                    showResult('authResult', `❌ Ошибка: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showResult('authResult', `❌ Ошибка сети: ${error.message}`, 'error');
+            }
+        }
+
+        function clearAuth() {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            showResult('authResult', '🗑️ Авторизация очищена', 'info');
+            document.getElementById('teamsList').innerHTML = '';
+            document.getElementById('usersList').innerHTML = '';
+        }
+
+        async function apiCall(endpoint) {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                throw new Error('Токен не найден. Сначала авторизуйтесь.');
+            }
+
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`${response.status}: ${errorData.error || errorData.message || 'Unknown error'}`);
+            }
+
+            return response.json();
+        }
+
+        async function testTeams() {
+            try {
+                showResult('apiResult', '🔄 Загружаем команды...', 'info');
+                const teams = await apiCall('/teams');
+                
+                showResult('apiResult', `✅ Загружено команд: ${teams.length}`, 'success');
+                
+                const teamsList = document.getElementById('teamsList');
+                teamsList.innerHTML = teams.map(team => `
+                    <div class="team-card">
+                        <h4>${team.name}</h4>
+                        <p><strong>ID:</strong> ${team.id}</p>
+                        <p><strong>Участников:</strong> ${team.members?.length || 0}</p>
+                        <button onclick="loadAvailableUsers('${team.id}')">Загрузить доступных пользователей</button>
+                    </div>
+                `).join('');
+                
+                if (teams.length > 0) {
+                    currentTeamId = teams[0].id;
+                }
+            } catch (error) {
+                showResult('apiResult', `❌ Ошибка загрузки команд: ${error.message}`, 'error');
+            }
+        }
+
+        async function testUsers() {
+            try {
+                showResult('apiResult', '🔄 Загружаем всех пользователей...', 'info');
+                const users = await apiCall('/users');
+                
+                showResult('apiResult', `✅ Загружено пользователей: ${users.length}`, 'success');
+                
+                const usersList = document.getElementById('usersList');
+                usersList.innerHTML = `<h3>Все пользователи (${users.length})</h3>` + 
+                    users.slice(0, 10).map(user => `
+                        <div class="user-card">
+                            <div>
+                                <strong>${user.displayName || user.name}</strong><br>
+                                <small>${user.email} | ${user.role || 'Роль не указана'}</small>
+                            </div>
+                        </div>
+                    `).join('') + 
+                    (users.length > 10 ? `<p>... и еще ${users.length - 10} пользователей</p>` : '');
+            } catch (error) {
+                showResult('apiResult', `❌ Ошибка загрузки пользователей: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAvailableUsers() {
+            if (!currentTeamId) {
+                showResult('apiResult', '❌ Сначала загрузите команды', 'error');
+                return;
+            }
+            await loadAvailableUsers(currentTeamId);
+        }
+
+        async function loadAvailableUsers(teamId) {
+            try {
+                showResult('apiResult', `🔄 Загружаем доступных пользователей для команды ${teamId}...`, 'info');
+                const users = await apiCall(`/teams/${teamId}/available-users`);
+                
+                showResult('apiResult', `✅ Загружено доступных пользователей: ${users.length}`, 'success');
+                
+                const usersList = document.getElementById('usersList');
+                usersList.innerHTML = `<h3>Доступные пользователи для команды ${teamId} (${users.length})</h3>` + 
+                    users.slice(0, 20).map(user => `
+                        <div class="user-card">
+                            <div>
+                                <strong>${user.name || user.displayName}</strong><br>
+                                <small>${user.email} | ${user.role || 'Роль не указана'}</small>
+                            </div>
+                        </div>
+                    `).join('') + 
+                    (users.length > 20 ? `<p>... и еще ${users.length - 20} пользователей</p>` : '');
+            } catch (error) {
+                showResult('apiResult', `❌ Ошибка загрузки доступных пользователей: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html> 
