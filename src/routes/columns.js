@@ -179,8 +179,8 @@ router.get('/projects/:projectId/columns', authenticate, async (req, res) => {
       project.customerId === req.user.uid ||
       project.pmId === req.user.uid ||
       (project.team && project.team.includes(req.user.uid)) ||
-      req.user.roles.includes('presale') ||
-      req.user.roles.includes('super-admin');
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin');
 
     if (!hasAccess) {
       return res.status(403).json({ message: 'Not authorized to view project columns' });

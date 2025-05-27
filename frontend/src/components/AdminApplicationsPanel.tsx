@@ -43,10 +43,10 @@ export const AdminApplicationsPanel: React.FC = () => {
       const appsResponse = await getApplications();
       setApplications(appsResponse);
       
-      // Загружаем пользователей с ролью project_manager
+      // Загружаем пользователей с ролью pm
       const usersResponse = await apiClient.get('/users');
       const pms = usersResponse.data.filter((user: User) => 
-        user.roles.includes('project_manager')
+        user.roles.includes('pm')
       );
       setProjectManagers(pms);
       

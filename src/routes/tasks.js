@@ -92,6 +92,11 @@ const { body, validationResult } = require('express-validator');
  *               dueDate:
  *                 type: string
  *                 format: date-time
+ *               priority:
+ *                 type: string
+ *                 enum: [low, medium, high, critical]
+ *               description:
+ *                 type: string
  *     responses:
  *       201:
  *         description: Задача создана
@@ -197,8 +202,8 @@ router.get('/projects/:projectId/tasks', authenticate, async (req, res) => {
       project.pmId === req.user.uid ||
       (project.teamMembers && project.teamMembers.includes(req.user.uid)) ||
       (project.team && project.team.includes(req.user.uid)) ||
-      req.user.roles.includes('presale') ||
-      req.user.roles.includes('super-admin');
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin');
 
     if (!hasAccess) {
       return res.status(403).json({ message: 'Not authorized to view project tasks' });
@@ -279,7 +284,9 @@ router.post('/projects/:projectId/tasks',
     body('assignee').optional(),
     body('status').optional().isIn(['todo', 'in_progress', 'done']),
     body('color').optional(),
-    body('dueDate').optional().isISO8601()
+    body('dueDate').optional().isISO8601(),
+    body('priority').optional().isIn(['low', 'medium', 'high', 'critical']),
+    body('description').optional().trim()
   ],
   async (req, res) => {
     try {
@@ -289,7 +296,7 @@ router.post('/projects/:projectId/tasks',
       }
 
       const { projectId } = req.params;
-      const { text, column, assignee, status, color, dueDate } = req.body;
+      const { text, column, assignee, status, color, dueDate, priority, description } = req.body;
 
       // Check if user is PM of the project
       const projectDoc = await db.collection('projects').doc(projectId).get();
@@ -311,36 +318,88 @@ router.post('/projects/:projectId/tasks',
         return res.status(403).json({ message: 'Not authorized to create tasks in this project' });
       }
 
-      // Check if column exists
-      const columnDoc = await db.collection('projects')
-        .doc(projectId)
-        .collection('columns')
-        .doc(column)
-        .get();
+      // Check if column exists - создаем колонку если не существует
+      let columnExists = false;
+      try {
+        const columnDoc = await db.collection('projects')
+          .doc(projectId)
+          .collection('columns')
+          .where('name', '==', column)
+          .limit(1)
+          .get();
+        
+        columnExists = !columnDoc.empty;
+      } catch (error) {
+        console.log('Column check error:', error);
+      }
 
-      if (!columnDoc.exists) {
-        return res.status(400).json({ message: 'Invalid column' });
+      if (!columnExists) {
+        // Создаем колонку если не существует
+        const columnOrder = {
+          'backlog': 0,
+          'todo': 1,
+          'in_progress': 2,
+          'review': 3,
+          'done': 4
+        };
+
+        await db.collection('projects')
+          .doc(projectId)
+          .collection('columns')
+          .add({
+            name: column,
+            order: columnOrder[column] || 1,
+            createdAt: new Date(),
+            createdBy: req.user.uid
+          });
       }
 
       // Check if assignee exists and is part of the team
+      let assigneeDetails = null;
       if (assignee) {
+        // Получаем информацию об исполнителе
+        const assigneeDoc = await db.collection('users').doc(assignee).get();
+        if (assigneeDoc.exists) {
+          const assigneeData = assigneeDoc.data();
+          assigneeDetails = {};
+          
+          // Добавляем только определенные поля
+          assigneeDetails.id = assignee;
+          if (assigneeData.displayName) assigneeDetails.fullName = assigneeData.displayName;
+          else if (assigneeData.name) assigneeDetails.fullName = assigneeData.name;
+          else assigneeDetails.fullName = 'Unknown User';
+          
+          if (assigneeData.email) assigneeDetails.email = assigneeData.email;
+          if (assigneeData.profileImage) assigneeDetails.profileImage = assigneeData.profileImage;
+          else if (assigneeData.avatarUrl) assigneeDetails.profileImage = assigneeData.avatarUrl;
+        }
+
+        // Проверяем, что исполнитель в команде
         if (!project.team || !project.team.includes(assignee)) {
-          return res.status(400).json({ message: 'Assignee must be a team member' });
+          // Если не в команде, но это PM или админ - разрешаем
+          if (!req.user.roles?.includes('admin') && project.pmId !== assignee) {
+            return res.status(400).json({ message: 'Assignee must be a team member' });
+          }
         }
       }
 
       const taskData = {
         text,
         column,
-        assignee: assignee || null,
-        status: status || 'todo',
-        color: color || null,
-        dueDate: dueDate ? new Date(dueDate) : null,
+        status: status || column || 'todo',
+        priority: priority || 'medium',
         createdAt: new Date(),
         createdBy: req.user.uid,
         updatedAt: new Date(),
         updatedBy: req.user.uid
       };
+
+      // Добавляем только определенные поля
+      if (assignee) taskData.assignee = assignee;
+      if (assigneeDetails) taskData.assigneeDetails = assigneeDetails;
+      if (color) taskData.color = color;
+      if (dueDate) taskData.dueDate = new Date(dueDate);
+      if (description) taskData.description = description;
 
       const taskRef = await db.collection('projects')
         .doc(projectId)
@@ -358,13 +417,14 @@ router.post('/projects/:projectId/tasks',
             taskId: taskRef.id,
             text,
             column,
-            assignee
+            assignee,
+            priority
           },
           timestamp: new Date()
         });
 
       // Create notification for assignee
-      if (assignee) {
+      if (assignee && assignee !== req.user.uid) {
         await db.collection('users')
           .doc(assignee)
           .collection('notifications')
@@ -403,8 +463,8 @@ router.get('/projects/:projectId/tasks/:taskId/history', authenticate, async (re
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -835,8 +895,8 @@ router.get('/projects/:projectId/tasks/:taskId/files', authenticate, async (req,
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -1146,8 +1206,8 @@ router.get('/projects/:projectId/tasks/:taskId/comments', authenticate, async (r
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -1396,8 +1456,8 @@ router.get('/projects/:projectId/tasks/:taskId/tags', authenticate, async (req, 
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -1643,8 +1703,8 @@ router.get('/projects/:projectId/tasks/:taskId/subtasks', authenticate, async (r
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -1920,8 +1980,8 @@ router.get('/projects/:projectId/tasks/:taskId/dependencies', authenticate, asyn
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -2043,8 +2103,8 @@ router.get('/projects/:projectId/tasks/filter', authenticate, async (req, res) =
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -2332,8 +2392,8 @@ router.get('/projects/:projectId/tasks/:taskId/time-entries', authenticate, asyn
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -2385,8 +2445,8 @@ router.get('/projects/:projectId/tasks/:taskId/statistics', authenticate, async 
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -2506,8 +2566,8 @@ router.get('/projects/:projectId/tasks/statistics', authenticate, async (req, re
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -2606,8 +2666,8 @@ router.get('/projects/:projectId/activity', authenticate, async (req, res) => {
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);
@@ -2681,8 +2741,8 @@ router.get('/projects/:projectId/activity/statistics', authenticate, async (req,
 
     const projectData = projectDoc.data();
     const hasAccess = 
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.team.includes(req.user.uid);

@@ -34,14 +34,7 @@ const menuItems = [
     label: "Заявки", 
     alt: "Applications", 
     roles: ["admin"] // Только админ видит заявки на проекты
-  },
-  { 
-    id: "project-managers", 
-    icon: "/team.svg", 
-    label: "PM", 
-    alt: "Project Managers", 
-    roles: ["admin"] // Только админ управляет PM
-  },
+  }
 ];
 
 export const LeftMenuByAnima = ({ onViewChange, activeView, onLogout }: LeftMenuByAnimaProps): JSX.Element => {

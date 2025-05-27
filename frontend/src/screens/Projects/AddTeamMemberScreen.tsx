@@ -97,7 +97,7 @@ export const AddTeamMemberScreen: React.FC = () => {
     (u.specialization && u.specialization.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const isPM = user?.roles?.includes('pm') || user?.roles?.includes('project_manager') || user?.role === 'pm';
+  const isPM = user?.roles?.includes('pm') || user?.roles?.includes('pm') || user?.role === 'pm';
 
   console.log('Render state:', { loading, error, isPM, usersCount: users.length });
 

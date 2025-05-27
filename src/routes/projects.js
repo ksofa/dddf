@@ -66,7 +66,7 @@
  *                 type: string
  *               customerId:
  *                 type: string
- *               presaleId:
+ *               adminId:
  *                 type: string
  *     responses:
  *       201:
@@ -220,7 +220,7 @@ router.get('/', authenticate, async (req, res) => {
 
     // Фильтрация по роли пользователя
     if (req.user.roles && req.user.roles.includes('admin')) {
-      // Админы видят все проекты
+      // Админы могут видеть все проекты
     } else if (req.user.roles && req.user.roles.includes('customer')) {
       query = query.where('customerId', '==', req.user.uid);
     } else if (req.user.roles && req.user.roles.includes('pm')) {
@@ -235,8 +235,6 @@ router.get('/', authenticate, async (req, res) => {
       needsClientSideFiltering = true;
       filterField = 'teamMembers';
       filterValue = req.user.uid;
-    } else if (req.user.roles && (req.user.roles.includes('presale') || req.user.roles.includes('super-admin'))) {
-      // Presale и super-admin могут видеть все проекты
     } else {
       needsClientSideFiltering = true;
       filterField = 'teamMembers';
@@ -547,8 +545,6 @@ router.get('/:projectId', authenticate, async (req, res) => {
     // Check if user has access to this project
     const hasAccess = 
       req.user.roles.includes('admin') ||
-      req.user.roles.includes('super-admin') ||
-      req.user.roles.includes('presale') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
       projectData.teamLead === req.user.uid ||
@@ -681,7 +677,7 @@ router.get('/:projectId', authenticate, async (req, res) => {
 // Update project
 router.put('/:projectId',
   authenticate,
-  checkRole(['presale', 'pm']),
+  checkRole(['admin', 'pm']),
   [
     body('title').optional().trim(),
     body('description').optional().trim(),
@@ -708,7 +704,7 @@ router.put('/:projectId',
 
       // Check if user has access to update project
       const hasAccess = 
-        (req.user.roles.includes('presale') && project.status === 'pre_project') ||
+        (req.user.roles.includes('admin') && project.status === 'pre_project') ||
         (req.user.roles.includes('pm') && project.pmId === req.user.uid);
 
       if (!hasAccess) {
@@ -817,7 +813,7 @@ router.put('/:projectId',
 // Delete project
 router.delete('/:projectId',
   authenticate,
-  checkRole(['presale', 'super-admin']),
+  checkRole(['admin']),
   async (req, res) => {
     try {
       const { projectId } = req.params;
@@ -1192,7 +1188,7 @@ router.post('/:projectId/add-member', authenticate, async (req, res) => {
     // Проверяем, что пользователь является тимлидом этого проекта, PM проекта или админом
     const isTeamLead = projectData.teamLead === req.user.uid;
     const isProjectManager = projectData.manager === req.user.uid;
-    const isPM = req.user.roles && (req.user.roles.includes('pm') || req.user.roles.includes('project_manager'));
+    const isPM = req.user.roles && (req.user.roles.includes('pm') || req.user.roles.includes('pm'));
     const isAdmin = req.user.roles && req.user.roles.includes('admin');
     
     if (!isTeamLead && !isProjectManager && !isPM && !isAdmin) {
@@ -1269,7 +1265,6 @@ router.get('/:projectId/board', authenticate, async (req, res) => {
     // Check if user has access to the board
     const hasAccess = 
       req.user.roles.includes('admin') ||
-      req.user.roles.includes('super-admin') ||
       projectData.pmId === req.user.uid ||
       projectData.teamLead === req.user.uid ||
       (projectData.teamMembers && projectData.teamMembers.includes(req.user.uid));
@@ -1352,7 +1347,7 @@ router.post('/:projectId/tasks', authenticate, async (req, res) => {
 
     // Check if user is PM of this project
     const isPM = projectData.pmId === req.user.uid;
-    const isAdmin = req.user.roles.includes('admin') || req.user.roles.includes('super-admin');
+    const isAdmin = req.user.roles.includes('admin');
     
     if (!isPM && !isAdmin) {
       return res.status(403).json({ error: 'Only project manager can create tasks' });
@@ -1460,7 +1455,7 @@ router.put('/:projectId/tasks/:taskId/status', authenticate, async (req, res) =>
     // Check if user has permission to update status
     const isPM = taskData.createdBy === req.user.uid;
     const isAssignee = taskData.assigneeId === req.user.uid;
-    const isAdmin = req.user.roles.includes('admin') || req.user.roles.includes('super-admin');
+    const isAdmin = req.user.roles.includes('admin');
 
     if (!isPM && !isAssignee && !isAdmin) {
       return res.status(403).json({ error: 'Not authorized to update task status' });
@@ -1520,7 +1515,7 @@ router.put('/:projectId/tasks/:taskId', authenticate, async (req, res) => {
 
     // Check if user is PM
     const isPM = taskData.createdBy === req.user.uid;
-    const isAdmin = req.user.roles.includes('admin') || req.user.roles.includes('super-admin');
+    const isAdmin = req.user.roles.includes('admin');
 
     if (!isPM && !isAdmin) {
       return res.status(403).json({ error: 'Only project manager can update task details' });
@@ -1612,7 +1607,7 @@ router.delete('/:projectId/tasks/:taskId', authenticate, async (req, res) => {
 
     // Check if user is PM
     const isPM = taskData.createdBy === req.user.uid;
-    const isAdmin = req.user.roles.includes('admin') || req.user.roles.includes('super-admin');
+    const isAdmin = req.user.roles.includes('admin');
 
     if (!isPM && !isAdmin) {
       return res.status(403).json({ error: 'Only project manager can delete tasks' });
@@ -1730,7 +1725,7 @@ router.get('/:projectId/team', authenticate, async (req, res) => {
 
     // Check if user is PM of this project
     const isPM = projectData.pmId === req.user.uid;
-    const isAdmin = req.user.roles.includes('admin') || req.user.roles.includes('super-admin');
+    const isAdmin = req.user.roles.includes('admin');
 
     if (!isPM && !isAdmin) {
       return res.status(403).json({ error: 'Only project manager can view team details' });
@@ -1804,7 +1799,7 @@ router.put('/:projectId/team/:memberId/role', authenticate, async (req, res) => 
 
     // Check if user is PM of this project
     const isPM = projectData.pmId === req.user.uid;
-    const isAdmin = req.user.roles.includes('admin') || req.user.roles.includes('super-admin');
+    const isAdmin = req.user.roles.includes('admin');
 
     if (!isPM && !isAdmin) {
       return res.status(403).json({ error: 'Only project manager can update team roles' });
@@ -1863,7 +1858,7 @@ router.get('/:projectId/team/:memberId/performance', authenticate, async (req, r
 
     // Check if user is PM of this project
     const isPM = projectData.pmId === req.user.uid;
-    const isAdmin = req.user.roles.includes('admin') || req.user.roles.includes('super-admin');
+    const isAdmin = req.user.roles.includes('admin');
 
     if (!isPM && !isAdmin) {
       return res.status(403).json({ error: 'Only project manager can view team performance' });

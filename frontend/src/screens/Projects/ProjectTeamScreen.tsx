@@ -140,7 +140,7 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
     setInviteMessage('');
   };
 
-  const isPM = user?.roles?.includes('pm') || user?.roles?.includes('project_manager') || user?.role === 'pm';
+  const isPM = user?.roles?.includes('pm') || user?.roles?.includes('pm') || user?.role === 'pm';
 
   if (loading) {
     return (

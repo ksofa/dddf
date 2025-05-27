@@ -230,7 +230,7 @@ export const UniversalInvitationsScreen: React.FC = () => {
   }
 
   // PM видит отправленные приглашения
-  if (userRoles.includes('pm') || userRoles.includes('project_manager')) {
+  if (userRoles.includes('pm') || userRoles.includes('pm')) {
     return <PMInvitationsScreen />;
   }
 

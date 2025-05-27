@@ -93,7 +93,7 @@ const options = {
               type: 'string',
               description: 'ID заказчика',
             },
-            presaleManagerId: {
+            adminManagerId: {
               type: 'string',
               description: 'ID пресейл менеджера',
             },
@@ -184,7 +184,7 @@ const options = {
               description: 'Дата обновления',
             },
           },
-          required: ['id', 'name', 'customerId', 'presaleManagerId', 'status'],
+          required: ['id', 'name', 'customerId', 'adminManagerId', 'status'],
         },
         Task: {
           type: 'object',

@@ -2,6 +2,20 @@ const { auth } = require('../config/firebase');
 const { db } = require('../config/firebase');
 const jwt = require('jsonwebtoken');
 
+// Нормализация ролей для обратной совместимости
+const normalizeRole = (role) => {
+  if (role === 'admin' || role === 'admin') return 'admin';
+  if (role === 'pm') return 'pm';
+  if (role === 'teamlead') return 'pm'; // teamlead теперь PM
+  return role;
+};
+
+const normalizeRoles = (roles) => {
+  if (!Array.isArray(roles)) return [];
+  const validRoles = ['customer', 'executor', 'pm', 'admin'];
+  return [...new Set(roles.map(normalizeRole).filter(role => validRoles.includes(role)))];
+};
+
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -56,7 +70,8 @@ const authenticate = async (req, res, next) => {
     }
 
     const userData = userDoc.data();
-    req.user.roles = userData.roles || [];
+    // Нормализуем роли пользователя
+    req.user.roles = normalizeRoles(userData.roles || []);
     req.user.email = userData.email || req.user.email;
     req.user.displayName = userData.displayName || userData.fullName;
     
@@ -73,14 +88,19 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-const checkRole = (roles) => {
+const checkRole = (allowedRoles) => {
   return (req, res, next) => {
     if (!req.user || !req.user.roles) {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const hasRole = roles.some(role => req.user.roles.includes(role));
+    // Нормализуем разрешенные роли для обратной совместимости
+    const normalizedAllowedRoles = normalizeRoles(allowedRoles);
+    const userRoles = req.user.roles;
+    
+    const hasRole = normalizedAllowedRoles.some(role => userRoles.includes(role));
     if (!hasRole) {
+      console.log(`Access denied for user ${req.user.uid}. Required roles: ${normalizedAllowedRoles.join(',')}, User roles: ${userRoles.join(',')}`);
       return res.status(403).json({ message: 'Insufficient permissions' });
     }
 
@@ -90,5 +110,7 @@ const checkRole = (roles) => {
 
 module.exports = {
   authenticate,
-  checkRole
+  checkRole,
+  normalizeRole,
+  normalizeRoles
 }; 

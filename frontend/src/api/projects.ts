@@ -247,12 +247,35 @@ export async function getUsers() {
   }
 }
 
-export async function createTask({ projectId, status, title }: { projectId: string; status: string; title: string }) {
+export async function createTask({ 
+  projectId, 
+  status, 
+  title, 
+  assignee, 
+  dueDate, 
+  priority, 
+  color, 
+  description 
+}: { 
+  projectId: string; 
+  status: string; 
+  title: string; 
+  assignee?: string;
+  dueDate?: string;
+  priority?: string;
+  color?: string;
+  description?: string;
+}) {
   try {
     const response = await apiClient.post(`/projects/${projectId}/tasks`, {
       text: title,
       column: status,
-      status: status
+      status: status,
+      assignee: assignee,
+      dueDate: dueDate,
+      priority: priority,
+      color: color,
+      description: description
     });
     return response.data.taskId;
   } catch (error) {

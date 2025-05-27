@@ -6,7 +6,6 @@ import { ProjectsView } from "./sections/ProjectsView";
 import { TeamsView } from "./sections/TeamsView";
 import { ChatsView } from "./sections/ChatsView";
 import { ApplicationsView } from "./sections/ApplicationsView";
-import { ProjectManagersView } from "./sections/ProjectManagersView";
 import { UniversalInvitationsScreen } from "../Invitations/UniversalInvitationsScreen";
 import { StartScreen } from "./StartScreen";
 import { LoginScreen } from "./LoginScreen";
@@ -97,8 +96,6 @@ export const Screen = (): JSX.Element => {
         return <ChatsView />;
       case "applications":
         return <ApplicationsView />;
-      case "project-managers":
-        return <ProjectManagersView />;
       case "invitations":
         return <UniversalInvitationsScreen />;
       default:

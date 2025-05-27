@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "../../../../components/ui/card";
+import { Button } from "../../../../components/ui/button";
+import { Badge } from "../../../../components/ui/badge";
 import { api } from "../../../../services/api";
 import { 
   getUserChats, 
@@ -10,7 +13,8 @@ import {
   markMessagesAsRead, 
   Chat, 
   Message, 
-  SendMessageRequest
+  SendMessageRequest,
+  User
 } from "../../../../api/chats";
 import { useAuth } from "../../../../hooks/useAuth";
 
@@ -19,11 +23,30 @@ interface Project {
   title: string;
   teamMembers: string[];
   teamLead: string;
+  description?: string;
+  status?: string[];
 }
 
-interface User {
+// Расширяем интерфейс Chat для дополнительных полей
+interface ExtendedChat extends Chat {
+  unreadCount?: number;
+  lastMessageData?: {
+    text: string;
+    timestamp: Date;
+    senderId: string;
+  };
+}
+
+// Расширяем интерфейс Message для дополнительных полей
+interface ExtendedMessage extends Message {
+  senderName?: string;
+}
+
+// Расширяем интерфейс User для участников чата
+interface ChatParticipant {
   id: string;
   displayName?: string;
+  email?: string;
   profileImage?: string;
 }
 
@@ -31,9 +54,9 @@ export const ChatsView = () => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [chats, setChats] = useState<ExtendedChat[]>([]);
+  const [selectedChat, setSelectedChat] = useState<ExtendedChat | null>(null);
+  const [messages, setMessages] = useState<ExtendedMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -115,7 +138,7 @@ export const ChatsView = () => {
     try {
       setSelectedProject(project);
       const projectChats = await getProjectChats(project.id);
-      setChats(projectChats);
+      setChats(projectChats as ExtendedChat[]);
       setMobileView('chats');
     } catch (error) {
       console.error('Error loading project chats:', error);
@@ -126,7 +149,7 @@ export const ChatsView = () => {
     try {
       setLoading(true);
       const userChats = await getUserChats();
-      setChats(userChats);
+      setChats(userChats as ExtendedChat[]);
     } catch (error) {
       console.error('Error loading chats:', error);
     } finally {
@@ -144,12 +167,12 @@ export const ChatsView = () => {
   };
 
   // Загрузка сообщений чата
-  const loadChatMessages = async (chat: Chat) => {
+  const loadChatMessages = async (chat: ExtendedChat) => {
     try {
       setSelectedChat(chat);
       
       const chatMessages = await getChatMessages(chat.projectId, chat.id);
-      setMessages(chatMessages);
+      setMessages(chatMessages as ExtendedMessage[]);
       
       // Отмечаем сообщения как прочитанные
       await markMessagesAsRead(chat.projectId, chat.id);
@@ -205,18 +228,18 @@ export const ChatsView = () => {
   };
 
   const getAvatarUrl = (user: User) => {
-    return user.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'U')}&background=random`;
+    return user.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=random`;
   };
 
   const formatTime = (timestamp: any) => {
     if (!timestamp) return '';
-    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   };
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return '';
-    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -230,32 +253,26 @@ export const ChatsView = () => {
     }
   };
 
-  const getChatDisplayName = (chat: Chat) => {
-    if (chat.name) return chat.name;
-    
-    // Для приватных чатов показываем имя собеседника
-    if (chat.type === 'direct' && chat.participants) {
-      const otherParticipant = chat.participants.find(p => p !== user?.uid);
-      if (otherParticipant) {
-        const participant = allUsers.find(u => u.id === otherParticipant);
-        return participant?.displayName || 'Пользователь';
+  const getChatDisplayName = (chat: ExtendedChat) => {
+    if (chat.type === 'direct') {
+      // Для прямых чатов ищем другого участника
+      const otherParticipantId = chat.participants?.find(p => p !== user?.uid);
+      if (otherParticipantId) {
+        const participant = allUsers.find(u => u.id === otherParticipantId);
+        return participant?.displayName || 'Прямой чат';
       }
+      return 'Прямой чат';
     }
-    
-    return chat.name || 'Чат';
+    return chat.name || 'Групповой чат';
   };
 
-  const getChatSubtitle = (chat: Chat) => {
-    if (chat.projectTitle) {
-      return `Проект: ${chat.projectTitle}`;
+  const getChatSubtitle = (chat: ExtendedChat) => {
+    if (chat.type === 'direct') {
+      return 'Личная переписка';
     }
-    if (chat.type === 'group') {
-      return `${chat.participants?.length || 0} участников`;
-    }
-    return 'Личный чат';
+    return `${chat.participants?.length || 0} участников`;
   };
 
-  // Определяем заголовок в зависимости от роли
   const getTitle = () => {
     if (user?.roles?.includes('admin')) return 'Все чаты проектов';
     if (user?.roles?.includes('pm')) return 'Чаты моих проектов';
@@ -265,333 +282,344 @@ export const ChatsView = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-main-colorsaqua"></div>
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="text-gray-600">Загрузка чатов...</span>
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="flex h-[calc(100vh-80px)] bg-main-colorsbackground">
-      {/* Список проектов для PM */}
-      {user?.roles?.includes('pm') && mobileView === 'projects' && (
-        <div className="w-full md:w-80 bg-neutralneutral-100 border-r border-[#ececec] flex flex-col">
-          <div className="p-4 border-b border-[#ececec]">
-            <h2 className="text-lg font-h2 text-neutralneutral-10">Мои проекты</h2>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto">
-            {projects.length === 0 ? (
-              <div className="p-4 text-center text-neutralneutral-60 font-paragraph-16">
-                У вас пока нет проектов
-              </div>
-            ) : (
-              projects.map(project => (
-                <div
-                  key={project.id}
-                  onClick={() => loadProjectChats(project)}
-                  className="p-4 border-b border-[#ececec] hover:bg-main-colorsbackground cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-main-colorsaqua-20 rounded-lg flex items-center justify-center">
-                      <svg className="w-6 h-6 text-main-colorsaqua" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-paragraph-16-medium text-neutralneutral-10 truncate">
-                        {project.title}
-                      </h3>
-                      <p className="text-sm text-neutralneutral-60 font-paragraph-14 truncate">
-                        {project.teamMembers?.length || 0} участников
-                      </p>
-                    </div>
-                    <svg className="w-5 h-5 text-neutralneutral-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Список чатов проекта */}
-      {((user?.roles?.includes('pm') && selectedProject && mobileView === 'chats') || (!user?.roles?.includes('pm') && (!selectedChat || mobileView === 'chats'))) && (
-        <div className="w-full md:w-80 bg-neutralneutral-100 border-r border-[#ececec] flex flex-col">
-          <div className="p-4 border-b border-[#ececec]">
-            <div className="flex items-center justify-between">
-              {user?.roles?.includes('pm') && selectedProject ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedProject(null);
-                      setChats([]);
-                      setMobileView('projects');
-                    }}
-                    className="p-1 hover:bg-neutralneutral-90 rounded"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <div>
-                    <h2 className="text-lg font-h2 text-neutralneutral-10">Чаты проекта</h2>
-                    <p className="text-sm text-neutralneutral-60 font-paragraph-14">{selectedProject.title}</p>
-                  </div>
-                </div>
-              ) : (
-                <h2 className="text-lg font-h2 text-neutralneutral-10">Чаты</h2>
-              )}
-              {user?.roles?.includes('admin') && (
-                <button
-                  onClick={() => setShowCreateChat(true)}
-                  className="p-2 hover:bg-neutralneutral-90 rounded-lg transition-colors"
-                  title="Создать чат"
-                >
-                  <svg className="w-5 h-5 text-main-colorsaqua" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                </button>
-              )}
+  // Мобильная версия - показываем сообщения
+  if (selectedChat && mobileView === 'messages') {
+    return (
+      <div className="flex flex-col h-screen bg-white">
+        {/* Заголовок чата */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setMobileView('chats')}
+              className="md:hidden"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Button>
+            <div>
+              <h3 className="font-semibold text-gray-900">{getChatDisplayName(selectedChat)}</h3>
+              <p className="text-sm text-gray-500">{getChatSubtitle(selectedChat)}</p>
             </div>
           </div>
-          
-          <div className="flex-1 overflow-y-auto">
-            {chats.length === 0 ? (
-              <div className="p-4 text-center text-neutralneutral-60 font-paragraph-16">
-                {selectedProject ? 'В проекте пока нет чатов' : 'У вас пока нет чатов'}
-              </div>
-            ) : (
-              chats.map(chat => (
-                <div
-                  key={chat.id}
-                  onClick={() => loadChatMessages(chat)}
-                  className="p-4 border-b border-[#ececec] hover:bg-main-colorsbackground cursor-pointer transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-main-colorsaqua-20 rounded-lg flex items-center justify-center">
-                      {chat.type === 'group' ? (
-                        <svg className="w-6 h-6 text-main-colorsaqua" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                      ) : (
-                        <span className="text-main-colorsaqua font-paragraph-16-medium">
-                          {getChatDisplayName(chat)[0]}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-paragraph-16-medium text-neutralneutral-10 truncate">
-                        {getChatDisplayName(chat)}
-                      </h3>
-                      <p className="text-sm text-neutralneutral-60 font-paragraph-14 truncate">
-                        {chat.lastMessage || getChatSubtitle(chat)}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      {chat.lastMessageAt && (
-                        <span className="text-xs text-neutralneutral-60">
-                          {formatTime(chat.lastMessageAt)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
         </div>
-      )}
 
-      {/* Сообщения чата */}
-      {selectedChat && (
-        <div className="flex-1 flex flex-col bg-main-colorsbackground">
-          <div className="p-4 bg-neutralneutral-100 border-b border-[#ececec]">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => {
-                  setSelectedChat(null);
-                  setMessages([]);
-                  setMobileView('chats');
-                }}
-                className="p-1 hover:bg-neutralneutral-90 rounded md:hidden"
+        {/* Сообщения */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.senderId === user?.uid ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                  message.senderId === user?.uid
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-900'
+                }`}
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <div className="w-10 h-10 rounded-full bg-main-colorsaqua-20 flex items-center justify-center">
-                {selectedChat.type === 'group' ? (
-                  <svg className="w-5 h-5 text-main-colorsaqua" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                ) : (
-                  <span className="text-main-colorsaqua font-paragraph-16-medium">
-                    {getChatDisplayName(selectedChat)[0]}
-                  </span>
+                {message.senderId !== user?.uid && (
+                  <p className="text-xs font-medium mb-1 opacity-75">
+                    {message.senderName || message.sender?.displayName || 'Пользователь'}
+                  </p>
                 )}
-              </div>
-              <div>
-                <h3 className="font-paragraph-16-medium text-neutralneutral-10">
-                  {getChatDisplayName(selectedChat)}
-                </h3>
-                <p className="text-sm text-neutralneutral-60 font-paragraph-14">
-                  {getChatSubtitle(selectedChat)}
+                <p className="text-sm">{message.text}</p>
+                <p className={`text-xs mt-1 ${
+                  message.senderId === user?.uid ? 'text-blue-100' : 'text-gray-500'
+                }`}>
+                  {formatTime(message.timestamp)}
                 </p>
               </div>
             </div>
-          </div>
+          ))}
+        </div>
 
-          {/* Сообщения */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.length === 0 ? (
-              <div className="text-center text-neutralneutral-60 font-paragraph-16 mt-8">
-                Сообщений пока нет. Начните общение!
-              </div>
-            ) : (
-              messages.map((message, index) => {
-                const showDate = index === 0 || formatDate(message.timestamp) !== formatDate(messages[index - 1]?.timestamp);
-                
-                return (
-                  <div key={message.id}>
-                    {showDate && (
-                      <div className="text-center text-sm text-neutralneutral-60 font-paragraph-14 my-4">
-                        {formatDate(message.timestamp)}
-                      </div>
-                    )}
-                    <div className={`flex ${message.senderId === user?.uid ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        message.senderId === user?.uid
-                          ? 'bg-main-colorsaqua text-white'
-                          : 'bg-neutralneutral-100 text-neutralneutral-10'
-                      }`}>
-                        {message.senderId !== user?.uid && (selectedChat.type === 'group') && (
-                          <p className="text-xs font-paragraph-14-medium mb-1 opacity-75">
-                            {message.sender?.displayName}
-                          </p>
-                        )}
-                        <p className="font-paragraph-16">{message.text}</p>
-                        <p className={`text-xs mt-1 ${
-                          message.senderId === user?.uid ? 'text-white opacity-75' : 'text-neutralneutral-60'
-                        }`}>
-                          {formatTime(message.timestamp)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Ввод сообщения */}
-          <div className="p-4 bg-neutralneutral-100 border-t border-[#ececec]">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-                placeholder="Написать сообщение..."
-                disabled={sendingMessage}
-                className="flex-1 px-4 py-2 border border-[#ececec] rounded-lg focus:outline-none focus:border-main-colorsaqua font-paragraph-16 disabled:opacity-50"
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim() || sendingMessage}
-                className="px-4 py-2 bg-main-colorsaqua text-white rounded-lg hover:bg-[#3771C8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-paragraph-16-medium"
-              >
-                {sendingMessage ? 'Отправка...' : 'Отправить'}
-              </button>
-            </div>
+        {/* Поле ввода сообщения */}
+        <div className="p-4 border-t border-gray-200 bg-white">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              placeholder="Введите сообщение..."
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={sendingMessage}
+            />
+            <Button
+              onClick={handleSendMessage}
+              disabled={!newMessage.trim() || sendingMessage}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </Button>
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {/* Модальное окно создания чата (только для админов) */}
-      {showCreateChat && user?.roles?.includes('admin') && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-h2 text-neutralneutral-10 mb-4">Создать новый чат</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-paragraph-14-medium text-neutralneutral-10 mb-2">
-                  Название чата
-                </label>
-                <input
-                  type="text"
-                  value={newChatName}
-                  onChange={(e) => setNewChatName(e.target.value)}
-                  className="w-full px-3 py-2 border border-[#ececec] rounded-lg focus:outline-none focus:border-main-colorsaqua font-paragraph-16"
-                  placeholder="Введите название чата"
-                />
-              </div>
+  // Показываем чаты проекта
+  if (selectedProject && mobileView === 'chats') {
+    return (
+      <div className="p-6 bg-gray-50 min-h-screen">
+        <div className="max-w-4xl mx-auto">
+          {/* Заголовок */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSelectedProject(null);
+                  setMobileView('projects');
+                }}
+                className="mb-3 text-blue-600 hover:text-blue-800 p-0"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Назад к проектам
+              </Button>
+              <h1 className="text-3xl font-bold text-gray-900">Чаты проекта</h1>
+              <p className="text-gray-600 mt-1">{selectedProject.title}</p>
+            </div>
+            <Button 
+              onClick={() => setShowCreateChat(true)}
+              className="flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Создать чат
+            </Button>
+          </div>
 
-              <div>
-                <label className="block text-sm font-paragraph-14-medium text-neutralneutral-10 mb-2">
-                  Тип чата
-                </label>
-                <select
-                  value={newChatType}
-                  onChange={(e) => setNewChatType(e.target.value as 'group' | 'direct')}
-                  className="w-full px-3 py-2 border border-[#ececec] rounded-lg focus:outline-none focus:border-main-colorsaqua font-paragraph-16"
+          {/* Список чатов */}
+          {chats.length === 0 ? (
+            <div className="text-center py-12">
+              <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Нет чатов</h3>
+              <p className="text-gray-500 mb-4">Создайте первый чат для этого проекта</p>
+              <Button onClick={() => setShowCreateChat(true)}>
+                Создать чат
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {chats.map((chat) => (
+                <Card 
+                  key={chat.id} 
+                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => loadChatMessages(chat)}
                 >
-                  <option value="group">Групповой</option>
-                  <option value="direct">Личный</option>
-                </select>
-              </div>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-blue-600 rounded-full flex items-center justify-center">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-lg text-gray-900">{getChatDisplayName(chat)}</h3>
+                          <p className="text-gray-600">{getChatSubtitle(chat)}</p>
+                          {chat.lastMessageData && (
+                            <p className="text-sm text-gray-500 mt-1 line-clamp-1">
+                              {chat.lastMessageData.text}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge variant={chat.type === 'direct' ? 'outline' : 'default'}>
+                          {chat.type === 'direct' ? 'Личный' : 'Групповой'}
+                        </Badge>
+                        {chat.unreadCount && chat.unreadCount > 0 && (
+                          <Badge className="bg-red-500 text-white">
+                            {chat.unreadCount}
+                          </Badge>
+                        )}
+                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
 
-              <div>
-                <label className="block text-sm font-paragraph-14-medium text-neutralneutral-10 mb-2">
-                  Участники
-                </label>
-                <div className="max-h-40 overflow-y-auto border border-[#ececec] rounded-lg">
-                  {allUsers.map(user => (
-                    <label key={user.id} className="flex items-center p-2 hover:bg-neutralneutral-90 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedUsers.includes(user.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedUsers([...selectedUsers, user.id]);
-                          } else {
-                            setSelectedUsers(selectedUsers.filter(id => id !== user.id));
-                          }
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="font-paragraph-16">{user.displayName}</span>
-                    </label>
-                  ))}
+        {/* Модальное окно создания чата */}
+        {showCreateChat && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Создать чат</h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCreateChat(false)}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Название чата
+                  </label>
+                  <input
+                    type="text"
+                    value={newChatName}
+                    onChange={(e) => setNewChatName(e.target.value)}
+                    placeholder="Введите название чата..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Тип чата
+                  </label>
+                  <select
+                    value={newChatType}
+                    onChange={(e) => setNewChatType(e.target.value as 'group' | 'direct')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="group">Групповой чат</option>
+                    <option value="direct">Личный чат</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Участники
+                  </label>
+                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg">
+                    {allUsers.map((user) => (
+                      <div
+                        key={user.id}
+                        className="flex items-center gap-3 p-3 hover:bg-gray-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.includes(user.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedUsers([...selectedUsers, user.id]);
+                            } else {
+                              setSelectedUsers(selectedUsers.filter(id => id !== user.id));
+                            }
+                          }}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="font-medium">{user.displayName}</div>
+                          <div className="text-sm text-gray-600">{user.email}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button
+                    onClick={handleCreateChat}
+                    disabled={!newChatName.trim() || selectedUsers.length === 0 || creatingChat}
+                    className="flex-1"
+                  >
+                    {creatingChat ? 'Создание...' : 'Создать чат'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowCreateChat(false)}
+                  >
+                    Отмена
+                  </Button>
                 </div>
               </div>
             </div>
-
-            <div className="flex gap-2 mt-6">
-              <button
-                onClick={handleCreateChat}
-                disabled={!newChatName.trim() || selectedUsers.length === 0 || creatingChat}
-                className="flex-1 py-2 bg-main-colorsaqua text-white rounded-lg hover:bg-[#3771C8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-paragraph-16-medium"
-              >
-                {creatingChat ? 'Создание...' : 'Создать'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowCreateChat(false);
-                  setNewChatName("");
-                  setSelectedUsers([]);
-                }}
-                className="px-4 py-2 border border-[#ececec] text-neutralneutral-60 rounded-lg hover:bg-neutralneutral-90 transition-colors font-paragraph-16-medium"
-              >
-                Отмена
-              </button>
-            </div>
           </div>
+        )}
+      </div>
+    );
+  }
+
+  // Показываем список проектов
+  return (
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">{getTitle()}</h1>
+          <p className="text-gray-600 mt-1">Общайтесь с командой в чатах проектов</p>
         </div>
-      )}
+
+        {projects.length === 0 ? (
+          <div className="text-center py-12">
+            <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Нет доступных проектов</h3>
+            <p className="text-gray-500">Проекты с чатами будут отображаться здесь</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {projects.map((project) => (
+              <Card 
+                key={project.id} 
+                className="cursor-pointer hover:shadow-lg transition-all duration-200"
+                onClick={() => loadProjectChats(project)}
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg mb-2">{project.title}</CardTitle>
+                      <p className="text-gray-600 text-sm line-clamp-2">{project.description}</p>
+                    </div>
+                    {project.status && project.status.length > 0 && (
+                      <Badge className="bg-green-100 text-green-800">
+                        {project.status[0] === 'active' ? 'Активный' : project.status[0]}
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <span>{project.teamMembers?.length || 0} участников</span>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

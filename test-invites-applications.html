@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест Invites и Applications</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .success {
+            color: green;
+            background-color: #d4edda;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            color: red;
+            background-color: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .result {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background-color: #e9ecef;
+            border: 1px solid #ddd;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        .tab.active {
+            background-color: #007bff;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тест Invites и Applications</h1>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('applications')">Applications (Заявки)</div>
+            <div class="tab" onclick="showTab('invites')">Invites (Приглашения)</div>
+            <div class="tab" onclick="showTab('admin')">Admin Panel</div>
+        </div>
+
+        <!-- Applications Tab -->
+        <div id="applications" class="tab-content active">
+            <div class="section">
+                <h2>📝 Создать заявку (без авторизации)</h2>
+                <form id="applicationForm">
+                    <div class="form-group">
+                        <label>ФИО *:</label>
+                        <input type="text" name="fullName" value="Иван Петров" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Телефон *:</label>
+                        <input type="tel" name="phone" value="+7 999 123-45-67" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email:</label>
+                        <input type="email" name="email" value="ivan@test.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Название проекта *:</label>
+                        <input type="text" name="projectTitle" value="Разработка мобильного приложения" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Описание проекта *:</label>
+                        <textarea name="projectDescription" rows="3" required>Нужно создать мобильное приложение для iOS и Android с функциями чата и геолокации</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Ставка:</label>
+                        <select name="rate">
+                            <option value="Договорная">Договорная</option>
+                            <option value="Фиксированная">Фиксированная</option>
+                            <option value="Почасовая">Почасовая</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Дата старта проекта:</label>
+                        <input type="date" name="startDate" value="2025-02-17">
+                    </div>
+                    <div class="form-group">
+                        <label>Оценочное время реализации:</label>
+                        <input type="number" name="estimatedDuration" value="6" min="1">
+                        <select name="estimatedDurationUnit">
+                            <option value="days">Дней</option>
+                            <option value="weeks">Недель</option>
+                            <option value="months" selected>Месяцев</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Техническое задание (текст):</label>
+                        <textarea name="techSpec" rows="3">React Native, Firebase, Google Maps API, Push-уведомления</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Файл ТЗ:</label>
+                        <input type="file" name="techSpecFile" accept=".pdf,.doc,.docx,.txt,.jpg,.png">
+                    </div>
+                    <div class="form-group">
+                        <label>Сопроводительное письмо:</label>
+                        <textarea name="coverLetter" rows="3">Проект важен для нашей компании. Готовы обсуждать детали и бюджет. Золотые горы обещаю-обещаю, купиться на них будешь.</textarea>
+                    </div>
+                    <button type="submit">Отправить заявку</button>
+                </form>
+                <div id="applicationResult"></div>
+            </div>
+        </div>
+
+        <!-- Invites Tab -->
+        <div id="invites" class="tab-content">
+            <div class="section">
+                <h2>🔐 Авторизация PM</h2>
+                <div class="form-group">
+                    <label>Email PM:</label>
+                    <input type="email" id="pmEmail" value="pm@mail.ru">
+                </div>
+                <div class="form-group">
+                    <label>Пароль:</label>
+                    <input type="password" id="pmPassword" value="123456">
+                </div>
+                <button onclick="loginPM()">Войти как PM</button>
+                <div id="pmLoginResult"></div>
+            </div>
+
+            <div class="section">
+                <h2>📨 Создать приглашение</h2>
+                <form id="inviteForm">
+                    <div class="form-group">
+                        <label>ID проекта:</label>
+                        <input type="text" name="projectId" placeholder="Введите ID проекта">
+                    </div>
+                    <div class="form-group">
+                        <label>ID исполнителя:</label>
+                        <input type="text" name="executorId" placeholder="Введите ID исполнителя">
+                    </div>
+                    <div class="form-group">
+                        <label>Роль:</label>
+                        <input type="text" name="role" value="executor">
+                    </div>
+                    <div class="form-group">
+                        <label>Описание:</label>
+                        <textarea name="description" rows="2">Приглашаем вас принять участие в проекте</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Ставка:</label>
+                        <select name="rate">
+                            <option value="Договорная">Договорная</option>
+                            <option value="Фиксированная">Фиксированная</option>
+                            <option value="Почасовая">Почасовая</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Дата старта проекта:</label>
+                        <input type="date" name="startDate" value="2025-02-17">
+                    </div>
+                    <div class="form-group">
+                        <label>Оценочное время реализации:</label>
+                        <input type="number" name="estimatedDuration" value="6" min="1">
+                        <select name="estimatedDurationUnit">
+                            <option value="days">Дней</option>
+                            <option value="weeks">Недель</option>
+                            <option value="months" selected>Месяцев</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Файл ТЗ:</label>
+                        <input type="file" name="techSpecFile" accept=".pdf,.doc,.docx,.txt,.jpg,.png">
+                    </div>
+                    <div class="form-group">
+                        <label>Сопроводительное письмо:</label>
+                        <textarea name="coverLetter" rows="3">Приглашаем вас в наш проект. Условия работы обсуждаются индивидуально.</textarea>
+                    </div>
+                    <button type="submit">Отправить приглашение</button>
+                </form>
+                <div id="inviteResult"></div>
+            </div>
+        </div>
+
+        <!-- Admin Tab -->
+        <div id="admin" class="tab-content">
+            <div class="section">
+                <h2>🔐 Авторизация админа</h2>
+                <div class="form-group">
+                    <label>Email админа:</label>
+                    <input type="email" id="adminEmail" value="ad@mail.ru">
+                </div>
+                <div class="form-group">
+                    <label>Пароль:</label>
+                    <input type="password" id="adminPassword" value="123456">
+                </div>
+                <button onclick="loginAdmin()">Войти как админ</button>
+                <div id="adminLoginResult"></div>
+            </div>
+
+            <div class="section">
+                <h2>📋 Управление заявками</h2>
+                <button onclick="loadApplications()">Загрузить заявки</button>
+                <button onclick="loadPMs()">Загрузить PM</button>
+                <div id="applicationsListResult"></div>
+                <div id="applicationsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+        let authToken = null;
+        let projectManagers = [];
+
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        // Show result
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `result ${type}`;
+        }
+
+        // ============ APPLICATIONS ============
+
+        // Create application
+        document.getElementById('applicationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            try {
+                const formData = new FormData(e.target);
+                
+                const response = await fetch(`${API_BASE}/applications`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResult('applicationResult', `✅ Заявка создана успешно!\nID: ${result.applicationId}`, 'success');
+                } else {
+                    throw new Error(result.message || 'Ошибка создания заявки');
+                }
+            } catch (error) {
+                showResult('applicationResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        });
+
+        // ============ INVITES ============
+
+        // Login PM
+        async function loginPM() {
+            try {
+                const email = document.getElementById('pmEmail').value;
+                const password = document.getElementById('pmPassword').value;
+                
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    showResult('pmLoginResult', '✅ Вход выполнен успешно!', 'success');
+                } else {
+                    throw new Error(data.message || 'Ошибка входа');
+                }
+            } catch (error) {
+                showResult('pmLoginResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        // Create invite
+        document.getElementById('inviteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!authToken) {
+                showResult('inviteResult', '❌ Сначала войдите как PM', 'error');
+                return;
+            }
+            
+            try {
+                const formData = new FormData(e.target);
+                const projectId = formData.get('projectId');
+                
+                const response = await fetch(`${API_BASE}/invites/projects/${projectId}/team/invite`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResult('inviteResult', `✅ Приглашение отправлено успешно!\nID: ${result.inviteId}`, 'success');
+                } else {
+                    throw new Error(result.message || 'Ошибка отправки приглашения');
+                }
+            } catch (error) {
+                showResult('inviteResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        });
+
+        // ============ ADMIN ============
+
+        // Login admin
+        async function loginAdmin() {
+            try {
+                const email = document.getElementById('adminEmail').value;
+                const password = document.getElementById('adminPassword').value;
+                
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    showResult('adminLoginResult', '✅ Вход выполнен успешно!', 'success');
+                } else {
+                    throw new Error(data.message || 'Ошибка входа');
+                }
+            } catch (error) {
+                showResult('adminLoginResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        // Load applications
+        async function loadApplications() {
+            if (!authToken) {
+                showResult('applicationsListResult', '❌ Сначала войдите как админ', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/applications`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const applications = await response.json();
+                
+                if (response.ok) {
+                    showResult('applicationsListResult', `✅ Загружено ${applications.length} заявок`, 'success');
+                    displayApplications(applications);
+                } else {
+                    throw new Error(applications.message || 'Ошибка загрузки заявок');
+                }
+            } catch (error) {
+                showResult('applicationsListResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        // Load PMs
+        async function loadPMs() {
+            if (!authToken) {
+                showResult('applicationsListResult', '❌ Сначала войдите как админ', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/users?role=pm`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const users = await response.json();
+                
+                if (response.ok) {
+                    projectManagers = users.filter(user => user.roles && user.roles.includes('pm'));
+                    showResult('applicationsListResult', `✅ Загружено ${projectManagers.length} проект-менеджеров`, 'success');
+                } else {
+                    throw new Error(users.message || 'Ошибка загрузки PM');
+                }
+            } catch (error) {
+                showResult('applicationsListResult', `❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        // Display applications
+        function displayApplications(applications) {
+            const container = document.getElementById('applicationsList');
+            
+            if (applications.length === 0) {
+                container.innerHTML = '<p>Нет заявок</p>';
+                return;
+            }
+            
+            let html = '<h3>📋 Список заявок</h3>';
+            
+            applications.forEach(app => {
+                html += `
+                    <div style="border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 5px;">
+                        <h4>${app.projectTitle}</h4>
+                        <p><strong>ФИО:</strong> ${app.fullName}</p>
+                        <p><strong>Телефон:</strong> ${app.phone}</p>
+                        <p><strong>Email:</strong> ${app.email || 'Не указан'}</p>
+                        <p><strong>Ставка:</strong> ${app.rate || 'Не указана'}</p>
+                        <p><strong>Дата старта:</strong> ${app.startDate ? new Date(app.startDate).toLocaleDateString() : 'Не указана'}</p>
+                        <p><strong>Время реализации:</strong> ${app.estimatedDuration ? `${app.estimatedDuration} ${app.estimatedDurationUnit}` : 'Не указано'}</p>
+                        <p><strong>Описание:</strong> ${app.projectDescription}</p>
+                        ${app.coverLetter ? `<p><strong>Сопроводительное письмо:</strong> ${app.coverLetter}</p>` : ''}
+                        ${app.techSpecFile ? `<p><strong>Файл ТЗ:</strong> ${app.techSpecFile.originalName} (${(app.techSpecFile.size / 1024 / 1024).toFixed(2)} MB)</p>` : ''}
+                        <p><strong>Статус:</strong> <span style="color: ${app.status === 'pending' ? 'orange' : app.status === 'approved' ? 'green' : 'red'}">${app.status}</span></p>
+                        <p><strong>Дата создания:</strong> ${new Date(app.createdAt).toLocaleString()}</p>
+                        
+                        ${app.status === 'pending' ? `
+                            <div style="margin-top: 10px;">
+                                <select id="pm-${app.id}" style="margin-right: 10px;">
+                                    <option value="">Выберите PM</option>
+                                    ${projectManagers.map(pm => `<option value="${pm.uid}">${pm.fullName || pm.displayName || pm.email}</option>`).join('')}
+                                </select>
+                                <button onclick="approveApplication('${app.id}')" style="background-color: green;">Одобрить</button>
+                                <button onclick="rejectApplication('${app.id}')" style="background-color: red;">Отклонить</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // Approve application
+        async function approveApplication(applicationId) {
+            const pmSelect = document.getElementById(`pm-${applicationId}`);
+            const pmId = pmSelect.value;
+            
+            if (!pmId) {
+                alert('Выберите проект-менеджера');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/applications/${applicationId}/approve`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ pmId })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert('✅ Заявка одобрена и проект создан!');
+                    loadApplications(); // Перезагружаем список
+                } else {
+                    throw new Error(result.message || 'Ошибка одобрения заявки');
+                }
+            } catch (error) {
+                alert(`❌ Ошибка: ${error.message}`);
+            }
+        }
+
+        // Reject application
+        async function rejectApplication(applicationId) {
+            const reason = prompt('Причина отклонения (необязательно):');
+            
+            try {
+                const response = await fetch(`${API_BASE}/applications/${applicationId}/reject`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ reason })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert('✅ Заявка отклонена!');
+                    loadApplications(); // Перезагружаем список
+                } else {
+                    throw new Error(result.message || 'Ошибка отклонения заявки');
+                }
+            } catch (error) {
+                alert(`❌ Ошибка: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html> 

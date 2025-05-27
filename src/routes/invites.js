@@ -156,6 +156,35 @@ const router = express.Router();
 const { db } = require('../config/firebase');
 const { authenticate, checkRole } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
+const multer = require('multer');
+const path = require('path');
+
+// Multer configuration for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/tech-specs/');
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'techspec-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    // Allow common document and image formats
+    const allowedTypes = /\.(pdf|doc|docx|txt|jpg|jpeg|png|gif)$/i;
+    if (allowedTypes.test(file.originalname)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Allowed: PDF, DOC, DOCX, TXT, JPG, PNG, GIF'));
+    }
+  }
+});
 
 // Get user's invites
 router.get('/', authenticate, async (req, res) => {
@@ -215,11 +244,17 @@ router.get('/', authenticate, async (req, res) => {
 // Create invite
 router.post('/projects/:projectId/team/invite',
   authenticate,
-  checkRole(['pm', 'presale']),
+  checkRole(['pm', 'admin']),
+  upload.single('techSpecFile'),
   [
     body('executorId').notEmpty(),
     body('role').optional().trim(),
-    body('description').optional().trim()
+    body('description').optional().trim(),
+    body('rate').optional().trim(), // Ставка (например "Договорная")
+    body('startDate').optional().isISO8601(), // Дата старта проекта
+    body('estimatedDuration').optional().trim(), // Оценочное время реализации
+    body('estimatedDurationUnit').optional().isIn(['days', 'weeks', 'months']), // Единица времени
+    body('coverLetter').optional().trim() // Сопроводительное письмо
   ],
   async (req, res) => {
     try {
@@ -229,7 +264,16 @@ router.post('/projects/:projectId/team/invite',
       }
 
       const { projectId } = req.params;
-      const { executorId, role, description } = req.body;
+      const { 
+        executorId, 
+        role, 
+        description, 
+        rate,
+        startDate,
+        estimatedDuration,
+        estimatedDurationUnit,
+        coverLetter
+      } = req.body;
 
       // Check if project exists
       const projectDoc = await db.collection('projects').doc(projectId).get();
@@ -241,8 +285,9 @@ router.post('/projects/:projectId/team/invite',
 
       // Check if user has access to project
       const hasAccess = 
-        req.user.roles.includes('presale') ||
-        projectData.pmId === req.user.uid;
+        req.user.roles.includes('admin') ||
+        projectData.pmId === req.user.uid ||
+        projectData.manager === req.user.uid;
 
       if (!hasAccess) {
         return res.status(403).json({ message: 'Not authorized to invite team members' });
@@ -252,6 +297,13 @@ router.post('/projects/:projectId/team/invite',
       const executorDoc = await db.collection('users').doc(executorId).get();
       if (!executorDoc.exists) {
         return res.status(404).json({ message: 'Executor not found' });
+      }
+
+      const executorData = executorDoc.data();
+      
+      // Check if executor has correct role
+      if (!executorData.roles || !executorData.roles.includes('executor')) {
+        return res.status(400).json({ message: 'User is not an executor' });
       }
 
       // Check if executor is already in team
@@ -272,11 +324,28 @@ router.post('/projects/:projectId/team/invite',
 
       const inviteData = {
         projectId,
+        projectTitle: projectData.title,
         executorId,
-        role: role || 'Team Member',
+        executorName: executorData.fullName || executorData.displayName || executorData.email,
+        executorEmail: executorData.email,
+        role: role || 'executor',
         description: description || '',
+        rate: rate || 'Договорная', // Ставка
+        startDate: startDate ? new Date(startDate) : null, // Дата старта проекта
+        estimatedDuration: estimatedDuration ? parseInt(estimatedDuration) : null, // Время реализации
+        estimatedDurationUnit: estimatedDurationUnit || 'months', // Единица времени
+        coverLetter: coverLetter || '', // Сопроводительное письмо
+        techSpecFile: req.file ? {
+          filename: req.file.filename,
+          originalName: req.file.originalname,
+          path: req.file.path,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+          uploadedAt: new Date()
+        } : null, // Файл технического задания
         status: 'pending',
         createdBy: req.user.uid,
+        createdByName: req.user.displayName || req.user.email,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -288,9 +357,9 @@ router.post('/projects/:projectId/team/invite',
         .doc(executorId)
         .collection('notifications')
         .add({
-          type: 'invite',
-          title: 'New Project Invitation',
-          message: `You have been invited to join project "${projectData.title}"`,
+          type: 'project_invite',
+          title: 'Приглашение в проект',
+          message: `Вас приглашают в проект "${projectData.title}"`,
           inviteId: inviteRef.id,
           projectId,
           read: false,
@@ -382,7 +451,7 @@ router.put('/:inviteId/respond',
 // Accept/decline invite (by PM)
 router.put('/:inviteId/accept',
   authenticate,
-  checkRole(['pm', 'presale']),
+  checkRole(['pm', 'admin']),
   [
     body('action').isIn(['accept', 'decline']),
     body('comment').optional().trim()
@@ -415,7 +484,7 @@ router.put('/:inviteId/accept',
 
       // Check if user has access to project
       const hasAccess = 
-        req.user.roles.includes('presale') ||
+        req.user.roles.includes('admin') ||
         projectData.pmId === req.user.uid;
 
       if (!hasAccess) {
@@ -471,5 +540,53 @@ router.put('/:inviteId/accept',
     }
   }
 );
+
+// Download tech spec file
+router.get('/:inviteId/tech-spec-file', authenticate, async (req, res) => {
+  try {
+    const { inviteId } = req.params;
+
+    // Get invite
+    const inviteDoc = await db.collection('invites').doc(inviteId).get();
+    if (!inviteDoc.exists) {
+      return res.status(404).json({ message: 'Invite not found' });
+    }
+
+    const inviteData = inviteDoc.data();
+
+    // Check if user has access to this invite
+    const hasAccess = 
+      req.user.uid === inviteData.executorId || // Executor can download
+      req.user.uid === inviteData.createdBy || // Creator can download
+      req.user.roles.includes('admin'); // Admin can download
+
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Not authorized to download this file' });
+    }
+
+    // Check if file exists
+    if (!inviteData.techSpecFile) {
+      return res.status(404).json({ message: 'No tech spec file attached to this invite' });
+    }
+
+    const filePath = inviteData.techSpecFile.path;
+    const fs = require('fs');
+
+    // Check if file exists on disk
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'File not found on server' });
+    }
+
+    // Set appropriate headers
+    res.setHeader('Content-Disposition', `attachment; filename="${inviteData.techSpecFile.originalName}"`);
+    res.setHeader('Content-Type', inviteData.techSpecFile.mimetype);
+
+    // Send file
+    res.sendFile(path.resolve(filePath));
+  } catch (error) {
+    console.error('Download tech spec file error:', error);
+    res.status(500).json({ message: 'Error downloading file' });
+  }
+});
 
 module.exports = router; 

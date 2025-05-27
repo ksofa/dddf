@@ -197,8 +197,8 @@ router.get('/projects/:projectId/documents', authenticate, async (req, res) => {
       project.customerId === req.user.uid ||
       project.pmId === req.user.uid ||
       (project.team && project.team.includes(req.user.uid)) ||
-      req.user.roles.includes('presale') ||
-      req.user.roles.includes('super-admin');
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin');
 
     if (!hasAccess) {
       return res.status(403).json({ message: 'Not authorized to view project documents' });
@@ -284,8 +284,8 @@ router.post('/projects/:projectId/documents',
         project.customerId === req.user.uid ||
         project.pmId === req.user.uid ||
         (project.team && project.team.includes(req.user.uid)) ||
-        req.user.roles.includes('presale') ||
-        req.user.roles.includes('super-admin');
+        req.user.roles.includes('admin') ||
+        req.user.roles.includes('admin');
 
       if (!hasAccess) {
         return res.status(403).json({ message: 'Not authorized to upload documents' });
@@ -387,8 +387,8 @@ router.delete('/projects/:projectId/documents/:documentId',
       const hasAccess = 
         project.customerId === req.user.uid ||
         project.pmId === req.user.uid ||
-        req.user.roles.includes('presale') ||
-        req.user.roles.includes('super-admin');
+        req.user.roles.includes('admin') ||
+        req.user.roles.includes('admin');
 
       if (!hasAccess) {
         return res.status(403).json({ message: 'Not authorized to delete documents' });

@@ -36,7 +36,7 @@ export const AdminPanel: React.FC = () => {
   const roles = [
     { value: 'admin', label: 'Администратор' },
     { value: 'customer', label: 'Заказчик' },
-    { value: 'project_manager', label: 'Проект-менеджер' },
+    { value: 'pm', label: 'Проект-менеджер' },
     { value: 'executor', label: 'Исполнитель' }
   ];
 

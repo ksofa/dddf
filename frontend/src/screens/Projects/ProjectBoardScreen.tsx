@@ -1,6 +1,6 @@
-import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
+import { DragDropContext, Droppable, Draggable, DropResult, DroppableProvided, DroppableStateSnapshot, DraggableProvided, DraggableStateSnapshot } from "@hello-pangea/dnd";
 import { useEffect, useState } from 'react';
-import { getProjectBoard, createTask, updateTaskStatus, createDefaultScrumBoardWithTasks } from '../../api/projects';
+import { getProjectBoard, createTask, updateTaskStatus, createDefaultScrumBoardWithTasks, getUsers } from '../../api/projects';
 import React from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { apiClient } from '../../api/config';
@@ -12,6 +12,20 @@ const columnColors = [
   "bg-[#0FB14D]", // Правки
   "bg-[#0FB14D]", // Готово
 ];
+
+const priorityColors = {
+  low: '#10B981',
+  medium: '#F59E0B', 
+  high: '#EF4444',
+  critical: '#7C2D12'
+};
+
+const priorityLabels = {
+  low: 'Низкий',
+  medium: 'Средний',
+  high: 'Высокий', 
+  critical: 'Критический'
+};
 
 type ProjectBoardScreenProps = {
   projectId: string;
@@ -27,6 +41,7 @@ type Task = {
   };
   dueDate?: string;
   color?: string;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
 };
 
 type Column = {
@@ -35,13 +50,38 @@ type Column = {
   tasks: Task[];
 };
 
+type User = {
+  id: string;
+  uid?: string;
+  displayName: string;
+  email: string;
+  roles: string[];
+};
+
+type NewTaskData = {
+  title: string;
+  assignee: string;
+  dueDate: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  color: string;
+  description: string;
+};
+
 export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
   const { user } = useAuth();
   const [columns, setColumns] = useState<Column[]>([]);
   const [addingTaskCol, setAddingTaskCol] = useState<number | null>(null);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskData, setNewTaskData] = useState<NewTaskData>({
+    title: '',
+    assignee: '',
+    dueDate: '',
+    priority: 'medium',
+    color: '#3B82F6',
+    description: ''
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [teamMembers, setTeamMembers] = useState<User[]>([]);
 
   // Проверяем права пользователя
   const [isProjectPM, setIsProjectPM] = useState(false);
@@ -52,6 +92,7 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
     if (!projectId) return;
     
     loadBoard();
+    loadTeamMembers();
   }, [projectId]);
 
   const loadBoard = async () => {
@@ -100,6 +141,27 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
     }
   };
 
+  const loadTeamMembers = async () => {
+    try {
+      const users = await getUsers();
+      // Фильтруем только участников команды проекта
+      const projectResponse = await apiClient.get(`/projects/${projectId}`);
+      const project = projectResponse.data;
+      
+      const members = users.filter((user: User) => 
+        project.team?.includes(user.uid || user.id) ||
+        project.teamMembers?.some((member: any) => member.id === (user.uid || user.id)) ||
+        user.uid === project.pmId ||
+        user.uid === project.teamLead ||
+        user.uid === project.manager
+      );
+      
+      setTeamMembers(members);
+    } catch (error) {
+      console.error('Error loading team members:', error);
+    }
+  };
+
   // Проверяем, может ли пользователь перемещать задачу
   const canMoveTask = (task: Task) => {
     if (user?.roles?.includes('admin') || isProjectPM) return true;
@@ -137,17 +199,30 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
 
   // Добавление задачи (только для PM и админов)
   const handleAddTask = async (colIdx: number) => {
-    if (!projectId || !newTaskTitle.trim() || (!isProjectPM && !user?.roles?.includes('admin'))) return;
+    if (!projectId || !newTaskData.title.trim() || (!isProjectPM && !user?.roles?.includes('admin'))) return;
     
     try {
       const status = columns[colIdx].status;
       await createTask({
         projectId: projectId,
         status: status,
-        title: newTaskTitle.trim(),
+        title: newTaskData.title.trim(),
+        assignee: newTaskData.assignee || undefined,
+        dueDate: newTaskData.dueDate || undefined,
+        priority: newTaskData.priority,
+        color: newTaskData.color,
+        description: newTaskData.description || undefined
       });
       
-      setNewTaskTitle("");
+      // Сбрасываем форму
+      setNewTaskData({
+        title: '',
+        assignee: '',
+        dueDate: '',
+        priority: 'medium',
+        color: '#3B82F6',
+        description: ''
+      });
       setAddingTaskCol(null);
       
       // Перезагружаем доску
@@ -156,6 +231,18 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
       console.error('Error creating task:', error);
       setError('Ошибка создания задачи');
     }
+  };
+
+  const resetTaskForm = () => {
+    setNewTaskData({
+      title: '',
+      assignee: '',
+      dueDate: '',
+      priority: 'medium',
+      color: '#3B82F6',
+      description: ''
+    });
+    setAddingTaskCol(null);
   };
 
   // Определяем заголовок в зависимости от роли
@@ -277,9 +364,28 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
                                       ...provided.draggableProps.style
                                     }}
                                   >
-                                    <div className="mb-2">
+                                    {/* Заголовок задачи */}
+                                    <div className="mb-2 font-medium">
                                       {task.title}
                                     </div>
+                                    
+                                    {/* Приоритет */}
+                                    {task.priority && task.priority !== 'medium' && (
+                                      <div className="mb-2">
+                                        <span 
+                                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
+                                          style={{
+                                            backgroundColor: `${priorityColors[task.priority]}20`,
+                                            color: priorityColors[task.priority]
+                                          }}
+                                        >
+                                          {task.priority === 'critical' && '🔥'}
+                                          {task.priority === 'high' && '⚡'}
+                                          {task.priority === 'low' && '📋'}
+                                          {priorityLabels[task.priority]}
+                                        </span>
+                                      </div>
+                                    )}
                                     
                                     {/* Информация о задаче */}
                                     <div className="flex items-center justify-between text-xs text-neutralneutral-60">
@@ -299,7 +405,11 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
                                       </div>
                                       
                                       {task.dueDate && (
-                                        <span className="text-xs text-neutralneutral-60">
+                                        <span className={`text-xs ${
+                                          new Date(task.dueDate) < new Date() 
+                                            ? 'text-red-600 font-medium' 
+                                            : 'text-neutralneutral-60'
+                                        }`}>
                                           {formatDate(task.dueDate)}
                                         </span>
                                       )}
@@ -313,41 +423,136 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
                           
                           {/* Форма добавления задачи */}
                           {addingTaskCol === colIdx && isProjectPM && (
-                            <form
-                              className="flex flex-col gap-2 mt-2"
-                              onSubmit={e => {
-                                e.preventDefault();
-                                handleAddTask(colIdx);
-                              }}
-                            >
-                              <textarea
-                                className="flex-1 border border-[#ECECEC] rounded-[8px] px-3 py-2 text-[15px] bg-white outline-none resize-none"
-                                value={newTaskTitle}
-                                onChange={e => setNewTaskTitle(e.target.value)}
-                                placeholder="Описание задачи..."
-                                autoFocus
-                                rows={3}
-                              />
-                              <div className="flex gap-2">
-                                <button
-                                  type="submit"
-                                  disabled={!newTaskTitle.trim()}
-                                  className="flex-1 py-2 bg-[#2982FD] text-white rounded-[8px] font-medium text-[15px] hover:bg-[#3771C8] transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  Добавить
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setAddingTaskCol(null);
-                                    setNewTaskTitle("");
-                                  }}
-                                  className="px-4 py-2 border border-[#ECECEC] text-[#666] rounded-[8px] font-medium text-[15px] hover:bg-[#F8F8FA] transition"
-                                >
-                                  Отмена
-                                </button>
-                              </div>
-                            </form>
+                            <div className="bg-white border border-[#ECECEC] rounded-[12px] p-4 mt-2 shadow-sm">
+                              <form
+                                className="flex flex-col gap-3"
+                                onSubmit={e => {
+                                  e.preventDefault();
+                                  handleAddTask(colIdx);
+                                }}
+                              >
+                                {/* Название задачи */}
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Название задачи *
+                                  </label>
+                                  <textarea
+                                    className="w-full border border-[#ECECEC] rounded-[8px] px-3 py-2 text-[15px] bg-white outline-none resize-none focus:border-[#2982FD] focus:ring-1 focus:ring-[#2982FD]"
+                                    value={newTaskData.title}
+                                    onChange={e => setNewTaskData(prev => ({ ...prev, title: e.target.value }))}
+                                    placeholder="Введите название задачи..."
+                                    autoFocus
+                                    rows={2}
+                                    required
+                                  />
+                                </div>
+
+                                {/* Описание */}
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Описание
+                                  </label>
+                                  <textarea
+                                    className="w-full border border-[#ECECEC] rounded-[8px] px-3 py-2 text-[14px] bg-white outline-none resize-none focus:border-[#2982FD] focus:ring-1 focus:ring-[#2982FD]"
+                                    value={newTaskData.description}
+                                    onChange={e => setNewTaskData(prev => ({ ...prev, description: e.target.value }))}
+                                    placeholder="Дополнительное описание задачи..."
+                                    rows={2}
+                                  />
+                                </div>
+
+                                {/* Исполнитель */}
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Исполнитель
+                                  </label>
+                                  <select
+                                    className="w-full border border-[#ECECEC] rounded-[8px] px-3 py-2 text-[14px] bg-white outline-none focus:border-[#2982FD] focus:ring-1 focus:ring-[#2982FD]"
+                                    value={newTaskData.assignee}
+                                    onChange={e => setNewTaskData(prev => ({ ...prev, assignee: e.target.value }))}
+                                  >
+                                    <option value="">Не назначен</option>
+                                    {teamMembers.map(member => (
+                                      <option key={member.id} value={member.uid || member.id}>
+                                        {member.displayName} ({member.email})
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* Приоритет и дедлайн в одной строке */}
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Приоритет
+                                    </label>
+                                    <select
+                                      className="w-full border border-[#ECECEC] rounded-[8px] px-3 py-2 text-[14px] bg-white outline-none focus:border-[#2982FD] focus:ring-1 focus:ring-[#2982FD]"
+                                      value={newTaskData.priority}
+                                      onChange={e => setNewTaskData(prev => ({ ...prev, priority: e.target.value as 'low' | 'medium' | 'high' | 'critical' }))}
+                                    >
+                                      <option value="low">Низкий</option>
+                                      <option value="medium">Средний</option>
+                                      <option value="high">Высокий</option>
+                                      <option value="critical">Критический</option>
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Дедлайн
+                                    </label>
+                                    <input
+                                      type="date"
+                                      className="w-full border border-[#ECECEC] rounded-[8px] px-3 py-2 text-[14px] bg-white outline-none focus:border-[#2982FD] focus:ring-1 focus:ring-[#2982FD]"
+                                      value={newTaskData.dueDate}
+                                      onChange={e => setNewTaskData(prev => ({ ...prev, dueDate: e.target.value }))}
+                                      min={new Date().toISOString().split('T')[0]}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Цвет задачи */}
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Цвет задачи
+                                  </label>
+                                  <div className="flex gap-2">
+                                    {['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16'].map(color => (
+                                      <button
+                                        key={color}
+                                        type="button"
+                                        className={`w-8 h-8 rounded-full border-2 transition-all ${
+                                          newTaskData.color === color 
+                                            ? 'border-gray-800 scale-110' 
+                                            : 'border-gray-300 hover:border-gray-500'
+                                        }`}
+                                        style={{ backgroundColor: color }}
+                                        onClick={() => setNewTaskData(prev => ({ ...prev, color }))}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Кнопки действий */}
+                                <div className="flex gap-2 pt-2">
+                                  <button
+                                    type="submit"
+                                    disabled={!newTaskData.title.trim()}
+                                    className="flex-1 py-2 bg-[#2982FD] text-white rounded-[8px] font-medium text-[15px] hover:bg-[#3771C8] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    Создать задачу
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={resetTaskForm}
+                                    className="px-4 py-2 border border-[#ECECEC] text-[#666] rounded-[8px] font-medium text-[15px] hover:bg-[#F8F8FA] transition"
+                                  >
+                                    Отмена
+                                  </button>
+                                </div>
+                              </form>
+                            </div>
                           )}
                         </div>
                       </div>

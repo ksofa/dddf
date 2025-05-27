@@ -12,7 +12,7 @@ router.post('/team-invitations', authenticate, async (req, res) => {
     const senderId = req.user.uid;
 
     // Проверяем, что отправитель - PM
-    if (!req.user.roles.includes('pm') && !req.user.roles.includes('project_manager')) {
+    if (!req.user.roles.includes('pm') && !req.user.roles.includes('pm')) {
       return res.status(403).json({ error: 'Только проект-менеджеры могут отправлять заявки' });
     }
 
@@ -176,7 +176,7 @@ router.get('/projects/:projectId/team-invitations', authenticate, async (req, re
     const { projectId } = req.params;
     const senderId = req.user.uid;
 
-    if (!req.user.roles.includes('pm') && !req.user.roles.includes('project_manager')) {
+    if (!req.user.roles.includes('pm') && !req.user.roles.includes('pm')) {
       return res.status(403).json({ error: 'Только проект-менеджеры могут просматривать заявки' });
     }
 

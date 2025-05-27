@@ -232,7 +232,7 @@ router.get('/:categoryId', authenticate, async (req, res) => {
 // Create new category
 router.post('/',
   authenticate,
-  checkRole(['presale', 'super-admin']),
+  checkRole(['admin', 'admin']),
   [
     body('name').notEmpty().trim(),
     body('description').optional().trim()
@@ -278,7 +278,7 @@ router.post('/',
 // Update category
 router.put('/:categoryId',
   authenticate,
-  checkRole(['presale', 'super-admin']),
+  checkRole(['admin', 'admin']),
   [
     body('name').optional().trim(),
     body('description').optional().trim()
@@ -329,7 +329,7 @@ router.put('/:categoryId',
 // Delete category
 router.delete('/:categoryId',
   authenticate,
-  checkRole(['presale', 'super-admin']),
+  checkRole(['admin', 'admin']),
   async (req, res) => {
     try {
       const { categoryId } = req.params;

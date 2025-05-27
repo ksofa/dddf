@@ -70,7 +70,12 @@ router.post('/applications', upload.single('techSpecFile'), [
   body('projectTitle').notEmpty().trim(),
   body('projectDescription').notEmpty().trim(),
   body('email').optional().isEmail().normalizeEmail(),
-  body('techSpec').optional().trim() // ТЗ как текст
+  body('techSpec').optional().trim(), // ТЗ как текст
+  body('rate').optional().trim(), // Ставка (например "Договорная")
+  body('startDate').optional().isISO8601(), // Дата старта проекта
+  body('estimatedDuration').optional().trim(), // Оценочное время реализации
+  body('estimatedDurationUnit').optional().isIn(['days', 'weeks', 'months']), // Единица времени
+  body('coverLetter').optional().trim() // Сопроводительное письмо
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -85,17 +90,24 @@ router.post('/applications', upload.single('techSpecFile'), [
       projectDescription: req.body.projectDescription,
       email: req.body.email || '',
       techSpec: req.body.techSpec || '',
+      rate: req.body.rate || 'Договорная', // Ставка
+      startDate: req.body.startDate ? new Date(req.body.startDate) : null, // Дата старта проекта
+      estimatedDuration: req.body.estimatedDuration ? parseInt(req.body.estimatedDuration) : null, // Время реализации
+      estimatedDurationUnit: req.body.estimatedDurationUnit || 'months', // Единица времени
+      coverLetter: req.body.coverLetter || '', // Сопроводительное письмо
       techSpecFile: req.file ? {
         filename: req.file.filename,
         originalName: req.file.originalname,
         path: req.file.path,
         size: req.file.size,
-        mimetype: req.file.mimetype
+        mimetype: req.file.mimetype,
+        uploadedAt: new Date()
       } : null,
       type: 'client_request',
       status: 'pending',
       createdAt: new Date(),
-      assignedTeamLead: null,
+      assignedPM: null, // Назначенный проект-менеджер
+      assignedTeamLead: null, // Устаревшее поле для совместимости
       teamMembers: []
     };
 
@@ -152,7 +164,7 @@ router.get('/applications', authenticate, async (req, res) => {
 
 // Одобрить заявку и создать проект
 router.post('/applications/:applicationId/approve', authenticate, [
-  body('teamLeadId').optional().isString()
+  body('pmId').optional().isString()
 ], async (req, res) => {
   try {
     // Проверяем права доступа
@@ -161,13 +173,12 @@ router.post('/applications/:applicationId/approve', authenticate, [
     }
 
     const { applicationId } = req.params;
-    const { teamLeadId } = req.body;
+    const { pmId } = req.body;
 
-    // === ДОБАВЛЕНО: Проверка обязательности PM ===
-    if (!teamLeadId) {
+    // Проверка обязательности PM
+    if (!pmId) {
       return res.status(400).json({ message: 'Не выбран проект-менеджер' });
     }
-    // === КОНЕЦ ДОБАВЛЕНИЯ ===
 
     const applicationDoc = await db.collection('applications').doc(applicationId).get();
     if (!applicationDoc.exists) {
@@ -176,23 +187,47 @@ router.post('/applications/:applicationId/approve', authenticate, [
 
     const applicationData = applicationDoc.data();
 
+    // Проверяем, что PM существует и имеет правильную роль
+    const pmDoc = await db.collection('users').doc(pmId).get();
+    if (!pmDoc.exists) {
+      return res.status(404).json({ message: 'Проект-менеджер не найден' });
+    }
+    
+    const pmData = pmDoc.data();
+    if (!pmData.roles || !pmData.roles.includes('pm')) {
+      return res.status(400).json({ message: 'Пользователь не является проект-менеджером' });
+    }
+
     // Создаем проект на основе заявки
+    // Обрабатываем customerInfo с проверкой на undefined значения
+    const customerInfo = {};
+    if (applicationData.fullName !== undefined) {
+      customerInfo.fullName = applicationData.fullName;
+    }
+    if (applicationData.phone !== undefined) {
+      customerInfo.phone = applicationData.phone;
+    }
+    if (applicationData.email !== undefined) {
+      customerInfo.email = applicationData.email;
+    }
+
     const projectData = {
       title: applicationData.projectTitle,
       description: applicationData.projectDescription,
-      status: ['active'],
-      manager: teamLeadId,
-      client: applicationData.fullName,
-      customerId: null, // Заказчик не зарегистрирован
-      customerInfo: {
-        fullName: applicationData.fullName,
-        phone: applicationData.phone,
-        email: applicationData.email
-      },
-      teamLead: teamLeadId,
-      team: [teamLeadId],
-      teamMembers: [teamLeadId],
-      techSpec: applicationData.techSpec,
+      status: 'active',
+      pmId: pmId,
+      manager: pmId,
+      customerId: null,
+      customerInfo: Object.keys(customerInfo).length > 0 ? customerInfo : null,
+      rate: applicationData.rate || 'Договорная',
+      startDate: applicationData.startDate || null,
+      estimatedDuration: applicationData.estimatedDuration || null,
+      estimatedDurationUnit: applicationData.estimatedDurationUnit || 'months',
+      coverLetter: applicationData.coverLetter || '',
+      team: [pmId],
+      teamMembers: [pmId],
+      techSpec: applicationData.techSpec || '',
+      techSpecFile: applicationData.techSpecFile || null,
       createdAt: new Date(),
       createdFrom: 'application',
       applicationId: applicationId
@@ -206,20 +241,19 @@ router.post('/applications/:applicationId/approve', authenticate, [
       approvedAt: new Date(),
       approvedBy: req.user.uid,
       projectId: projectRef.id,
-      assignedTeamLead: teamLeadId
+      assignedPM: pmId,
+      assignedTeamLead: pmId
     });
 
-    // Если назначен тимлид, создаем уведомление
-    if (teamLeadId) {
-      await db.collection('users').doc(teamLeadId).collection('notifications').add({
-        type: 'project_assigned',
-        title: 'Новый проект назначен',
-        message: `Вам назначен проект: ${projectData.title}`,
-        projectId: projectRef.id,
-        read: false,
-        createdAt: new Date()
-      });
-    }
+    // Создаем уведомление для PM
+    await db.collection('users').doc(pmId).collection('notifications').add({
+      type: 'project_assigned',
+      title: 'Новый проект назначен',
+      message: `Вам назначен проект: ${projectData.title}`,
+      projectId: projectRef.id,
+      read: false,
+      createdAt: new Date()
+    });
 
     res.json({
       message: 'Заявка одобрена и проект создан',
@@ -261,6 +295,50 @@ router.post('/applications/:applicationId/reject', authenticate, [
   } catch (error) {
     console.error('Reject application error:', error);
     res.status(500).json({ message: 'Ошибка при отклонении заявки' });
+  }
+});
+
+// Скачать файл технического задания из заявки
+router.get('/applications/:applicationId/tech-spec-file', authenticate, async (req, res) => {
+  try {
+    // Проверяем права доступа (только админы)
+    if (!req.user.roles || !req.user.roles.includes('admin')) {
+      return res.status(403).json({ message: 'Доступ запрещен' });
+    }
+
+    const { applicationId } = req.params;
+
+    // Получаем заявку
+    const applicationDoc = await db.collection('applications').doc(applicationId).get();
+    if (!applicationDoc.exists) {
+      return res.status(404).json({ message: 'Заявка не найдена' });
+    }
+
+    const applicationData = applicationDoc.data();
+
+    // Проверяем наличие файла
+    if (!applicationData.techSpecFile) {
+      return res.status(404).json({ message: 'К заявке не прикреплен файл технического задания' });
+    }
+
+    const filePath = applicationData.techSpecFile.path;
+    const fs = require('fs');
+
+    // Проверяем существование файла на диске
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'Файл не найден на сервере' });
+    }
+
+    // Устанавливаем заголовки для скачивания
+    res.setHeader('Content-Disposition', `attachment; filename="${applicationData.techSpecFile.originalName}"`);
+    res.setHeader('Content-Type', applicationData.techSpecFile.mimetype);
+
+    // Отправляем файл
+    const path = require('path');
+    res.sendFile(path.resolve(filePath));
+  } catch (error) {
+    console.error('Download application tech spec file error:', error);
+    res.status(500).json({ message: 'Ошибка при скачивании файла' });
   }
 });
 

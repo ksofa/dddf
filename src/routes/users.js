@@ -141,7 +141,7 @@ const { authenticate, checkRole } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 
 // Get users list
-router.get('/', authenticate, checkRole(['presale', 'super-admin']), async (req, res) => {
+router.get('/', authenticate, checkRole(['admin']), async (req, res) => {
   try {
     const { role, category, limit = 50, before } = req.query;
 
@@ -221,8 +221,7 @@ router.get('/:userId', authenticate, async (req, res) => {
     // Check if user has access to view this profile
     const hasAccess = 
       req.user.uid === userId ||
-      req.user.roles.includes('presale') ||
-      req.user.roles.includes('super-admin');
+      req.user.roles.includes('admin');
 
     if (!hasAccess) {
       // For other users, return limited profile
@@ -269,7 +268,7 @@ router.put('/profile', authenticate, async (req, res) => {
 // Update user (admin only)
 router.put('/:userId',
   authenticate,
-  checkRole(['presale', 'super-admin']),
+  checkRole(['admin']),
   [
     body('roles').optional().isArray(),
     body('categories').optional().isArray()
@@ -320,7 +319,7 @@ router.put('/:userId',
 // Get user statistics
 router.get('/:userId/statistics',
   authenticate,
-  checkRole(['presale', 'super-admin']),
+  checkRole(['admin']),
   async (req, res) => {
     try {
       const { userId } = req.params;
@@ -855,7 +854,7 @@ router.get('/meta/stats', authenticate, async (req, res) => {
 router.get('/', authenticate, async (req, res) => {
   try {
     // Only admins can get all users list
-    if (!req.user.roles.includes('admin') && !req.user.roles.includes('super-admin')) {
+    if (!req.user.roles.includes('admin')) {
       return res.status(403).json({ message: 'Access denied' });
     }
 

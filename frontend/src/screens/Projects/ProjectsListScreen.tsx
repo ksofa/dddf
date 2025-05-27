@@ -30,7 +30,7 @@ export const ProjectsListScreen: React.FC = () => {
   
   const user = getCurrentUser();
   const isAdmin = user?.roles?.includes('admin') || user?.role === 'admin';
-  const isPM = user?.roles?.includes('project_manager') || user?.roles?.includes('pm') || user?.role === 'pm';
+  const isPM = user?.roles?.includes('pm') || user?.roles?.includes('pm') || user?.role === 'pm';
 
   useEffect(() => {
     loadData();
@@ -47,7 +47,7 @@ export const ProjectsListScreen: React.FC = () => {
       // Если админ, загружаем проект-менеджеров
       if (isAdmin) {
         const usersData = await getUsers();
-        const pms = usersData.filter(user => user.roles.includes('project_manager'));
+        const pms = usersData.filter(user => user.roles.includes('pm'));
         setProjectManagers(pms);
       }
       

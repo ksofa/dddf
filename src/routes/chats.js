@@ -216,8 +216,8 @@ router.get('/projects/:projectId/chats', authenticate, async (req, res) => {
       (project.team && project.team.includes(req.user.uid)) ||
       (project.teamMembers && project.teamMembers.includes(req.user.uid)) ||
       req.user.roles.includes('admin') ||
-      req.user.roles.includes('presale') ||
-      req.user.roles.includes('super-admin');
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin');
 
     if (!hasAccess) {
       return res.status(403).json({ message: 'Not authorized to view project chats' });
@@ -313,7 +313,7 @@ router.get('/chats', authenticate, async (req, res) => {
     const allChats = [];
 
     // 1. Для админов - все чаты системы
-    if (userRoles.includes('admin') || userRoles.includes('super-admin')) {
+    if (userRoles.includes('admin') || userRoles.includes('admin')) {
       // Получаем все проекты
       const projectsSnapshot = await db.collection('projects').get();
       
@@ -573,8 +573,8 @@ router.post('/projects/:projectId/chats',
         project.customerId === req.user.uid ||
         project.pmId === req.user.uid ||
         (project.team && project.team.includes(req.user.uid)) ||
-        req.user.roles.includes('presale') ||
-        req.user.roles.includes('super-admin');
+        req.user.roles.includes('admin') ||
+        req.user.roles.includes('admin');
 
       if (!hasAccess) {
         return res.status(403).json({ message: 'Not authorized to create chats' });
@@ -879,8 +879,8 @@ router.post('/projects/:projectId/chats/:chatId/participants',
         project.customerId === req.user.uid ||
         project.pmId === req.user.uid ||
         (project.team && project.team.includes(req.user.uid)) ||
-        req.user.roles.includes('presale') ||
-        req.user.roles.includes('super-admin');
+        req.user.roles.includes('admin') ||
+        req.user.roles.includes('admin');
 
       if (!hasAccess) {
         return res.status(403).json({ message: 'Not authorized to modify chat' });
@@ -959,8 +959,8 @@ router.delete('/projects/:projectId/chats/:chatId/participants/:userId', authent
       project.customerId === req.user.uid ||
       project.pmId === req.user.uid ||
       (project.team && project.team.includes(req.user.uid)) ||
-      req.user.roles.includes('presale') ||
-      req.user.roles.includes('super-admin') ||
+      req.user.roles.includes('admin') ||
+      req.user.roles.includes('admin') ||
       req.user.uid === userId; // Users can remove themselves
 
     if (!hasAccess) {
@@ -1104,7 +1104,7 @@ router.get('/projects/:projectId/chats/:chatId/statistics', authenticate, async 
 // Create global chat (for admins to create chats with anyone)
 router.post('/chats/global',
   authenticate,
-  checkRole(['admin', 'super-admin']),
+  checkRole(['admin', 'admin']),
   [
     body('name').notEmpty().trim(),
     body('type').isIn(['group', 'direct']),
