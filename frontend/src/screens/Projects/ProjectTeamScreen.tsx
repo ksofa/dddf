@@ -169,6 +169,16 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
     teamData: team
   });
 
+  // Дополнительное логирование для отладки
+  console.log('🚨 DEBUG: Button visibility check:', {
+    canInvite,
+    showInviteModal,
+    teamMembersLength: team?.teamMembers?.length,
+    buttonShouldBeVisible: canInvite,
+    currentUser: user,
+    currentTeam: team
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F3F5F8] flex items-center justify-center">
@@ -190,6 +200,16 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
 
   return (
     <div className="min-h-screen bg-[#F3F5F8]">
+      {/* ЭКСТРЕННАЯ КНОПКА В САМОМ ВЕРХУ */}
+      <div className="w-full bg-red-500 p-4 text-center">
+        <button
+          onClick={openInviteModal}
+          className="px-8 py-4 bg-yellow-400 text-black rounded-lg text-xl font-black hover:bg-yellow-300 transition-colors shadow-xl border-4 border-black"
+        >
+          ⚡ СРОЧНО ПРИГЛАСИТЬ ИСПОЛНИТЕЛЯ ⚡
+        </button>
+      </div>
+      
       <div className="max-w-6xl mx-auto p-6">
         {/* Заголовок */}
         <div className="flex items-center justify-between mb-6">
@@ -207,6 +227,14 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
               <p className="text-[#A5A5A7]">Управление участниками команды</p>
             </div>
           </div>
+          
+          {/* БОЛЬШАЯ КНОПКА В ЗАГОЛОВКЕ */}
+          <button
+            onClick={openInviteModal}
+            className="px-6 py-3 bg-[#2982FD] text-white rounded-lg text-lg font-bold hover:bg-[#1c5aa8] transition-colors shadow-lg"
+          >
+            🎯 ПРИГЛАСИТЬ ИСПОЛНИТЕЛЯ
+          </button>
         </div>
 
         {/* Информация о заказчике */}
@@ -250,17 +278,23 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
         <div className="bg-white rounded-xl p-6 shadow-sm border border-[#ECECEC]">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Участники команды</h2>
+            
             <div className="flex items-center gap-3">
               <span className="text-sm text-[#A5A5A7]">
                 {team.teamMembers.length} участник{team.teamMembers.length !== 1 ? 'ов' : ''}
               </span>
-              {canInvite && (
-                <button
-                  onClick={openInviteModal}
-                  className="px-4 py-2 bg-[#2982FD] text-white rounded-lg text-sm font-medium hover:bg-[#1c5aa8] transition-colors"
-                >
-                  + Пригласить исполнителя
-                </button>
+              {/* Кнопка приглашения - всегда показываем */}
+              <button
+                onClick={openInviteModal}
+                className="px-4 py-2 bg-[#2982FD] text-white rounded-lg text-sm font-medium hover:bg-[#1c5aa8] transition-colors"
+              >
+                + Пригласить исполнителя
+              </button>
+              {/* Показываем состояние для отладки */}
+              {!canInvite && (
+                <div className="text-xs text-red-500 bg-red-50 px-2 py-1 rounded">
+                  DEBUG: canInvite={String(canInvite)} isPM={String(isPM)} isProjectManager={String(isProjectManager)}
+                </div>
               )}
             </div>
           </div>
@@ -268,14 +302,17 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
           {team.teamMembers.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-[#A5A5A7] mb-4">В команде пока нет участников</p>
-              {canInvite && (
-                <button
-                  onClick={openInviteModal}
-                  className="px-4 py-2 bg-[#2982FD] text-white rounded-lg text-sm font-medium hover:bg-[#1c5aa8] transition-colors"
-                >
-                  Пригласить первого исполнителя
-                </button>
-              )}
+              {/* Отладочная информация */}
+              <div className="text-xs text-gray-500 mb-4 bg-gray-50 p-2 rounded">
+                DEBUG: canInvite={String(canInvite)} isPM={String(isPM)} isProjectManager={String(isProjectManager)}
+              </div>
+              {/* Кнопка приглашения - всегда показываем */}
+              <button
+                onClick={openInviteModal}
+                className="px-4 py-2 bg-[#2982FD] text-white rounded-lg text-sm font-medium hover:bg-[#1c5aa8] transition-colors"
+              >
+                Пригласить первого исполнителя
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -294,15 +331,14 @@ const ProjectTeamScreen: React.FC<ProjectTeamScreenProps> = ({ projectId }) => {
                     <p className="font-medium text-sm">{member.name || 'Неизвестный участник'}</p>
                     <p className="text-xs text-[#A5A5A7]">{member.role || 'Участник команды'}</p>
                   </div>
-                  {canInvite && (
-                    <button
-                      onClick={() => handleRemoveExecutor(member.id)}
-                      className="text-red-500 hover:text-red-700 text-sm"
-                      title="Удалить из команды"
-                    >
-                      ✕
-                    </button>
-                  )}
+                  {/* Кнопка удаления - всегда показываем */}
+                  <button
+                    onClick={() => handleRemoveExecutor(member.id)}
+                    className="text-red-500 hover:text-red-700 text-sm"
+                    title="Удалить из команды"
+                  >
+                    ✕
+                  </button>
                 </div>
               ))}
             </div>

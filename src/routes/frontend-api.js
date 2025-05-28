@@ -1177,15 +1177,24 @@ router.get('/projects/:projectId/team', authenticate, async (req, res) => {
     const project = projectDoc.data();
     console.log('Project data:', {
       title: project.title,
+      pmId: project.pmId,
       manager: project.manager,
       teamMembers: project.teamMembers
     });
     
     // Проверяем доступ (PM или участник)
-    const hasAccess = project.manager === userId || 
+    // Используем pmId как основное поле для PM, manager как fallback
+    const projectManagerId = project.pmId || project.manager;
+    const hasAccess = projectManagerId === userId || 
                      (project.teamMembers && project.teamMembers.includes(userId));
     
-    console.log('Access check:', { hasAccess, isManager: project.manager === userId });
+    console.log('Access check:', { 
+      hasAccess, 
+      isManager: projectManagerId === userId,
+      pmId: project.pmId,
+      manager: project.manager,
+      userId 
+    });
     
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied' });
@@ -1193,8 +1202,10 @@ router.get('/projects/:projectId/team', authenticate, async (req, res) => {
     
     // Собираем всех участников команды
     const teamMemberIds = [
-      project.manager, // PM
-      ...(project.teamMembers || []), // Участники
+      projectManagerId, // PM
+      ...(project.teamMembers && Array.isArray(project.teamMembers) 
+          ? project.teamMembers.map(member => typeof member === 'string' ? member : member.id)
+          : []), // Участники
       ...(project.teamLead ? [project.teamLead] : []) // Team Lead
     ].filter((id, index, arr) => id && arr.indexOf(id) === index); // убираем дубли
     
@@ -1213,7 +1224,7 @@ router.get('/projects/:projectId/team', authenticate, async (req, res) => {
             email: memberData.email,
             roles: memberData.roles || [],
             avatar: memberData.avatar || memberData.photoURL || memberData.profileImage,
-            role: memberId === project.manager ? 'pm' : 
+            role: memberId === projectManagerId ? 'pm' : 
                   memberId === project.teamLead ? 'lead' : 'member'
           });
         }
@@ -1228,7 +1239,7 @@ router.get('/projects/:projectId/team', authenticate, async (req, res) => {
       projectId,
       projectTitle: project.title,
       teamMembers,
-      canManage: project.manager === userId // только PM может управлять
+      canManage: projectManagerId === userId // PM может управлять
     });
   } catch (error) {
     console.error('Get project team error:', error);
@@ -1301,7 +1312,9 @@ router.post('/projects/:projectId/invite', authenticate, [
     const project = projectDoc.data();
 
     // Проверяем права (только PM проекта)
-    if (project.manager !== userId) {
+    // Используем pmId как основное поле для PM, manager как fallback
+    const projectManagerId = project.pmId || project.manager;
+    if (projectManagerId !== userId) {
       return res.status(403).json({ error: 'Only project manager can send invitations' });
     }
 
@@ -1317,7 +1330,11 @@ router.post('/projects/:projectId/invite', authenticate, [
     }
 
     // Проверяем что исполнитель не в команде
-    if (project.teamMembers && project.teamMembers.includes(executorId)) {
+    const teamMemberIds = project.teamMembers && Array.isArray(project.teamMembers) 
+      ? project.teamMembers.map(member => typeof member === 'string' ? member : member.id)
+      : [];
+    
+    if (teamMemberIds.includes(executorId)) {
       return res.status(400).json({ error: 'Executor is already in the team' });
     }
 

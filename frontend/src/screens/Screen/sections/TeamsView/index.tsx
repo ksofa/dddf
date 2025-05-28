@@ -4,7 +4,7 @@ import { Button } from '../../../../components/ui/button';
 import { apiClient } from '../../../../api/config';
 import { CreateTeamModal } from './CreateTeamModal';
 import { AddMemberModal } from './AddMemberModal';
-import { useAuth } from '../../../../contexts/AuthContext';
+import { useAuth } from '../../../../hooks/useAuth';
 
 interface Team {
   id: string;
@@ -61,8 +61,8 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
 
   // Проверяем роль пользователя
-  const isPM = user?.roles?.includes('pm') || false;
-  const isAdmin = user?.roles?.includes('admin') || false;
+  const isPM = user?.roles?.includes('pm') || user?.role === 'pm' || false;
+  const isAdmin = user?.roles?.includes('admin') || user?.role === 'admin' || false;
   const canManageTeams = isPM || isAdmin;
 
   useEffect(() => {
@@ -76,8 +76,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
       
       const response = await apiClient.get('/teams');
       const teamsData = response.data;
-      
-      console.log('Loaded teams:', teamsData);
       
       // Преобразуем данные команд
       const formattedTeams = teamsData.map((team: any, index: number) => ({
@@ -129,8 +127,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
       const response = await apiClient.get(`/teams/${teamId}`);
       const teamData = response.data;
       
-      console.log('Team details:', teamData);
-      
       const teamDetails: TeamDetails = {
         id: teamData.id,
         name: teamData.name,
@@ -176,8 +172,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
   const handleInviteClick = (e: React.MouseEvent, team: Team) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    console.log('🎯 Invite button clicked for team:', team.name);
     
     // Если передан обработчик для поиска участников, используем его
     if (onTeamMemberSearch) {
@@ -328,7 +322,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                             <img src={selectedTeam.teamLead.avatar} alt={selectedTeam.teamLead.name} className="w-16 h-16 rounded-full object-cover" />
                           ) : (
                             <span className="text-white font-semibold text-xl">
-                              {selectedTeam.teamLead.name?.charAt(0).toUpperCase()}
+                              {(selectedTeam.teamLead.name || 'У').charAt(0).toUpperCase()}
                             </span>
                           )}
                         </div>
@@ -386,7 +380,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                               <img src={member.avatar} alt={member.name} className="w-12 h-12 rounded-full object-cover" />
                             ) : (
                               <span className="text-white font-semibold">
-                                {member.name.charAt(0).toUpperCase()}
+                                {(member.name || 'У').charAt(0).toUpperCase()}
                               </span>
                             )}
                           </div>
@@ -487,7 +481,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                             <img src={team.teamLead.avatar} alt={team.teamLead.name} className="w-8 h-8 rounded-full object-cover" />
                           ) : (
                             <span className="text-white font-semibold text-xs">
-                              {team.teamLead.name.charAt(0).toUpperCase()}
+                              {(team.teamLead.name || 'У').charAt(0).toUpperCase()}
                             </span>
                           )}
                         </div>
@@ -518,7 +512,7 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                             <img src={member.avatar} alt={member.name} className="w-6 h-6 rounded-full object-cover" />
                           ) : (
                             <span className="text-white font-semibold text-xs">
-                              {member.name.charAt(0).toUpperCase()}
+                              {(member.name || 'У').charAt(0).toUpperCase()}
                             </span>
                           )}
                         </div>

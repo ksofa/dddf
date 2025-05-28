@@ -98,7 +98,7 @@ export async function getProjectTeam(projectId: string): Promise<any> {
 // Получить доступных исполнителей
 export async function getAvailableExecutors() {
   try {
-    const response = await apiClient.get('/executors/search');
+    const response = await apiClient.get('/users/executors/search');
     return response.data;
   } catch (error) {
     console.error('Error getting available executors:', error);

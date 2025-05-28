@@ -1169,58 +1169,107 @@ router.get('/:projectId/team', authenticate, async (req, res) => {
 
     const projectData = projectDoc.data();
 
-    // Check if user is PM of this project
+    // Check if user is PM of this project or team member
     const isPM = projectData.pmId === req.user.uid;
     const isAdmin = req.user.roles.includes('admin');
+    const isTeamMember = projectData.teamMembers && 
+      (Array.isArray(projectData.teamMembers) 
+        ? projectData.teamMembers.some(member => 
+            typeof member === 'string' ? member === req.user.uid : member.id === req.user.uid)
+        : false);
 
-    if (!isPM && !isAdmin) {
-      return res.status(403).json({ error: 'Only project manager can view team details' });
+    if (!isPM && !isAdmin && !isTeamMember) {
+      return res.status(403).json({ error: 'Access denied' });
     }
 
     // Get team members with detailed information
     const teamMembers = [];
-    if (projectData.teamMembers && projectData.teamMembers.length > 0) {
-      const memberPromises = projectData.teamMembers.map(async (memberId) => {
-        const memberDoc = await db.collection('users').doc(memberId).get();
-        if (memberDoc.exists) {
-          const memberData = memberDoc.data();
-          
-          // Get member's tasks
-          const tasksSnapshot = await db.collection('projects')
-            .doc(projectId)
-            .collection('tasks')
-            .where('assigneeId', '==', memberId)
-            .get();
-
-          const tasks = tasksSnapshot.docs.map(taskDoc => ({
-            id: taskDoc.id,
-            ...taskDoc.data()
-          }));
-
+    
+    // Add PM to team members
+    if (projectData.pmId) {
+      try {
+        const pmDoc = await db.collection('users').doc(projectData.pmId).get();
+        if (pmDoc.exists) {
+          const pmData = pmDoc.data();
           teamMembers.push({
-            id: memberId,
-            displayName: memberData.displayName || memberData.fullName,
-            email: memberData.email,
-            roles: memberData.roles,
-            specialization: memberData.specialization,
-            tasks: {
-              total: tasks.length,
-              in_progress: tasks.filter(t => t.status === 'in_progress').length,
-              done: tasks.filter(t => t.status === 'done').length
-            }
+            id: projectData.pmId,
+            name: pmData.name || pmData.displayName || pmData.fullName || 'Unknown',
+            email: pmData.email,
+            roles: pmData.roles || [],
+            avatar: pmData.avatar || pmData.photoURL || pmData.profileImage,
+            role: 'pm'
           });
+        }
+      } catch (error) {
+        console.error(`Error getting PM ${projectData.pmId}:`, error);
+      }
+    }
+
+    // Add team members
+    if (projectData.teamMembers && projectData.teamMembers.length > 0) {
+      const memberPromises = projectData.teamMembers.map(async (member) => {
+        const memberId = typeof member === 'string' ? member : member.id;
+        
+        // Skip if already added as PM
+        if (memberId === projectData.pmId) return;
+        
+        try {
+          const memberDoc = await db.collection('users').doc(memberId).get();
+          if (memberDoc.exists) {
+            const memberData = memberDoc.data();
+            
+            teamMembers.push({
+              id: memberId,
+              name: memberData.name || memberData.displayName || memberData.fullName || 'Unknown',
+              email: memberData.email,
+              roles: memberData.roles || [],
+              avatar: memberData.avatar || memberData.photoURL || memberData.profileImage,
+              role: 'member'
+            });
+          }
+        } catch (error) {
+          console.error(`Error getting user ${memberId}:`, error);
         }
       });
       await Promise.all(memberPromises);
     }
 
+    // Add team lead if exists and not already added
+    if (projectData.teamLead && projectData.teamLead !== projectData.pmId) {
+      try {
+        const leadDoc = await db.collection('users').doc(projectData.teamLead).get();
+        if (leadDoc.exists) {
+          const leadData = leadDoc.data();
+          teamMembers.push({
+            id: projectData.teamLead,
+            name: leadData.name || leadData.displayName || leadData.fullName || 'Unknown',
+            email: leadData.email,
+            roles: leadData.roles || [],
+            avatar: leadData.avatar || leadData.photoURL || leadData.profileImage,
+            role: 'lead'
+          });
+        }
+      } catch (error) {
+        console.error(`Error getting team lead ${projectData.teamLead}:`, error);
+      }
+    }
+
+    // Return data in format expected by frontend
     res.json({
-      project: {
-        id: projectId,
-        title: projectData.title,
-        description: projectData.description
-      },
-      teamMembers
+      projectId,
+      projectTitle: projectData.title,
+      teamMembers,
+      canManage: isPM || isAdmin, // PM or admin can manage
+      teamLead: projectData.teamLead ? {
+        id: projectData.teamLead,
+        displayName: 'Team Lead', // Will be filled from user data if needed
+        email: ''
+      } : null,
+      customerInfo: projectData.customer ? {
+        fullName: projectData.customer.fullName || 'Unknown Customer',
+        phone: projectData.customer.phone || '',
+        email: projectData.customer.email || ''
+      } : null
     });
   } catch (error) {
     console.error('Error fetching project team:', error);
@@ -1374,106 +1423,90 @@ function calculateOnTimeDelivery(tasks) {
   return (onTimeTasks.length / completedTasks.length) * 100;
 }
 
-// Отправить приглашение исполнителю в проект
-router.post('/:projectId/send-invitation', authenticate, async (req, res) => {
+// Отправить приглашение исполнителю
+router.post('/:projectId/invite', authenticate, [
+  body('executorId').notEmpty().trim(),
+  body('message').optional().trim()
+], async (req, res) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
     const { projectId } = req.params;
     const { executorId, message } = req.body;
-    const senderId = req.user.uid;
+    const userId = req.user.uid;
 
-    // Проверяем, что отправитель - PM или админ
-    if (!req.user.roles.includes('pm') && !req.user.roles.includes('admin')) {
-      return res.status(403).json({ error: 'Только проект-менеджеры могут отправлять приглашения' });
-    }
-
-    // Получаем информацию о проекте
+    // Получаем проект
     const projectDoc = await db.collection('projects').doc(projectId).get();
     if (!projectDoc.exists) {
-      return res.status(404).json({ error: 'Проект не найден' });
+      return res.status(404).json({ error: 'Project not found' });
     }
 
-    const projectData = projectDoc.data();
+    const project = projectDoc.data();
 
-    // Проверяем, что пользователь - PM этого проекта или админ
-    const isPM = projectData.pmId === senderId || projectData.teamLead === senderId || projectData.manager === senderId;
-    const isAdmin = req.user.roles.includes('admin');
-
-    if (!isPM && !isAdmin) {
-      return res.status(403).json({ error: 'Только PM этого проекта может отправлять приглашения' });
+    // Проверяем права (только PM проекта)
+    // Используем pmId как основное поле для PM, manager как fallback
+    const projectManagerId = project.pmId || project.manager;
+    if (projectManagerId !== userId) {
+      return res.status(403).json({ error: 'Only project manager can send invitations' });
     }
 
-    // Получаем информацию о получателе
-    const userDoc = await db.collection('users').doc(executorId).get();
-    if (!userDoc.exists) {
-      return res.status(404).json({ error: 'Пользователь не найден' });
+    // Проверяем что исполнитель существует
+    const executorDoc = await db.collection('users').doc(executorId).get();
+    if (!executorDoc.exists) {
+      return res.status(404).json({ error: 'Executor not found' });
     }
 
-    const userData = userDoc.data();
-
-    // Проверяем, что получатель - исполнитель
-    if (!userData.roles.includes('executor')) {
-      return res.status(400).json({ error: 'Приглашения можно отправлять только исполнителям' });
+    const executorData = executorDoc.data();
+    if (!executorData.roles || !executorData.roles.includes('executor')) {
+      return res.status(400).json({ error: 'User is not an executor' });
     }
 
-    // Проверяем, нет ли уже активной заявки
-    const existingInvitation = await db.collection('team_invitations')
-      .where('projectId', '==', projectId)
-      .where('userId', '==', executorId)
-      .where('status', '==', 'pending')
-      .get();
-
-    if (!existingInvitation.empty) {
-      return res.status(400).json({ error: 'Приглашение уже отправлено этому пользователю' });
+    // Проверяем что исполнитель не в команде
+    const teamMemberIds = project.teamMembers && Array.isArray(project.teamMembers) 
+      ? project.teamMembers.map(member => typeof member === 'string' ? member : member.id)
+      : [];
+    
+    if (teamMemberIds.includes(executorId)) {
+      return res.status(400).json({ error: 'Executor is already in the team' });
     }
 
-    // Проверяем, не является ли пользователь уже участником команды
-    if (projectData.teamMembers && projectData.teamMembers.includes(executorId)) {
-      return res.status(400).json({ error: 'Пользователь уже является участником команды' });
-    }
-
-    // Создаем приглашение
-    const invitationId = db.collection('team_invitations').doc().id;
-    const invitation = {
-      id: invitationId,
-      type: 'team_invitation',
+    // Создаем приглашение (без сложных индексов)
+    const invitationData = {
       projectId,
-      projectName: projectData.title || projectData.name,
-      userId: executorId,
-      userName: userData.displayName || userData.fullName,
-      userEmail: userData.email,
-      senderId,
+      projectTitle: project.title,
+      executorId,
+      executorName: executorData.name || executorData.displayName || executorData.fullName,
+      executorEmail: executorData.email,
+      senderId: userId,
       senderName: req.user.displayName || req.user.email,
-      message: message || `Приглашение в проект "${projectData.title || projectData.name}"`,
+      message: message || `Приглашаем вас в проект "${project.title}"`,
       status: 'pending',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      createdAt: new Date()
     };
 
-    await db.collection('team_invitations').doc(invitationId).set(invitation);
+    const invitationRef = await db.collection('invitations').add(invitationData);
 
-    // Создаем запись в активности проекта
-    await db.collection('projects')
-      .doc(projectId)
-      .collection('activity')
-      .add({
-        type: 'invitation_sent',
-        userId: senderId,
-        details: {
-          invitedUserId: executorId,
-          invitedUserName: userData.displayName || userData.fullName,
-          message: message
-        },
-        timestamp: new Date()
-      });
+    // Уведомление исполнителю
+    await db.collection('users').doc(executorId).collection('notifications').add({
+      type: 'project_invitation',
+      title: 'Приглашение в проект',
+      message: `Вас приглашают в проект: ${project.title}`,
+      projectId,
+      invitationId: invitationRef.id,
+      read: false,
+      createdAt: new Date()
+    });
 
-    res.status(201).json({ 
-      message: 'Приглашение отправлено успешно',
-      invitationId: invitationId 
+    res.json({
+      message: 'Invitation sent successfully',
+      invitationId: invitationRef.id
     });
   } catch (error) {
-    console.error('Error sending invitation:', error);
-    const { status, message } = handleFirebaseError(error);
-    res.status(status).json({ error: message });
+    console.error('Send invitation error:', error);
+    res.status(500).json({ error: 'Failed to send invitation' });
   }
 });
 

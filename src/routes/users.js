@@ -732,4 +732,68 @@ router.get('/meta/stats', authenticate, async (req, res) => {
   }
 });
 
+// Поиск исполнителей для приглашения в проект
+router.get('/executors/search', authenticate, async (req, res) => {
+  try {
+    const { search, specialization, limit = 50 } = req.query;
+    const userId = req.user.uid;
+
+    // Проверяем права доступа (PM или admin)
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const userRoles = userDoc.data().roles || [];
+    if (!userRoles.includes('pm') && !userRoles.includes('admin')) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Строим запрос для поиска исполнителей
+    let query = db.collection('users').where('roles', 'array-contains', 'executor');
+
+    // Фильтр по специализации
+    if (specialization) {
+      query = query.where('specialization', '==', specialization);
+    }
+
+    query = query.limit(parseInt(limit));
+
+    const executorsSnapshot = await query.get();
+    const executors = [];
+
+    for (const doc of executorsSnapshot.docs) {
+      const executorData = doc.data();
+      
+      // Фильтр по поиску (имя или email)
+      if (search) {
+        const searchLower = search.toLowerCase();
+        const name = (executorData.name || executorData.displayName || executorData.fullName || '').toLowerCase();
+        const email = (executorData.email || '').toLowerCase();
+        
+        if (!name.includes(searchLower) && !email.includes(searchLower)) {
+          continue;
+        }
+      }
+
+      executors.push({
+        id: doc.id,
+        name: executorData.name || executorData.displayName || executorData.fullName || 'Unknown',
+        email: executorData.email,
+        specialization: executorData.specialization || 'Не указана',
+        avatar: executorData.avatar || executorData.photoURL || executorData.profileImage,
+        roles: executorData.roles || [],
+        contactInfo: executorData.contactInfo,
+        profession: executorData.profession,
+        categories: executorData.categories || []
+      });
+    }
+
+    res.json(executors);
+  } catch (error) {
+    console.error('Error searching executors:', error);
+    res.status(500).json({ error: 'Failed to search executors' });
+  }
+});
+
 module.exports = router; 
