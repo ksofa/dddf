@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .loading { background-color: #fff3cd; border-color: #ffeaa7; }
+    </style>
+</head>
+<body>
+    <h1>Production Debug - DDDF</h1>
+    <div id="results"></div>
+    
+    <script>
+        const API_URL = 'https://dddf-1.onrender.com';
+        const results = document.getElementById('results');
+        
+        function addResult(title, status, message) {
+            const div = document.createElement('div');
+            div.className = `test ${status}`;
+            div.innerHTML = `<h3>${title}</h3><p>${message}</p>`;
+            results.appendChild(div);
+        }
+        
+        async function runTests() {
+            addResult('Starting Tests', 'loading', 'Testing production connection...');
+            
+            // Test 1: Health check
+            try {
+                const response = await fetch(`${API_URL}/api/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('✅ Health Check', 'success', `Server is running. Uptime: ${Math.round(data.uptime)}s`);
+                } else {
+                    addResult('❌ Health Check', 'error', `HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                addResult('❌ Health Check', 'error', `Network error: ${error.message}`);
+            }
+            
+            // Test 2: CORS check
+            try {
+                const response = await fetch(`${API_URL}/api/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                addResult('✅ CORS Check', 'success', 'CORS headers are working correctly');
+            } catch (error) {
+                addResult('❌ CORS Check', 'error', `CORS error: ${error.message}`);
+            }
+            
+            // Test 3: Auth endpoint
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'test@test.com',
+                        password: 'wrongpassword'
+                    })
+                });
+                
+                if (response.status === 401) {
+                    addResult('✅ Auth Endpoint', 'success', 'Auth endpoint is responding (401 expected for wrong credentials)');
+                } else if (response.status === 200) {
+                    addResult('⚠️ Auth Endpoint', 'loading', 'Auth endpoint returned 200 (unexpected for wrong credentials)');
+                } else {
+                    addResult('❌ Auth Endpoint', 'error', `HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                addResult('❌ Auth Endpoint', 'error', `Auth error: ${error.message}`);
+            }
+            
+            // Test 4: Real login attempt
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'pm@mail.ru',
+                        password: '123456'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('✅ Real Login', 'success', `Login successful! User: ${data.user?.email || 'Unknown'}`);
+                } else {
+                    const errorData = await response.text();
+                    addResult('❌ Real Login', 'error', `HTTP ${response.status}: ${errorData}`);
+                }
+            } catch (error) {
+                addResult('❌ Real Login', 'error', `Login error: ${error.message}`);
+            }
+        }
+        
+        // Run tests on page load
+        runTests();
+    </script>
+</body>
+</html> 

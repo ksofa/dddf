@@ -1,6 +1,6 @@
 // API Configuration
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://dddf-production.up.railway.app/api'
+  ? 'https://dddf-1.onrender.com/api'
   : 'http://localhost:3000/api';
 
 export { API_BASE_URL };

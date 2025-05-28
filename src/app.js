@@ -86,6 +86,19 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Firebase test endpoint
+app.get('/api/firebase-test', (req, res) => {
+  res.json({
+    status: 'Firebase Config Check',
+    hasProjectId: !!process.env.FIREBASE_PROJECT_ID,
+    hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+    hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+    projectId: process.env.FIREBASE_PROJECT_ID || 'NOT_SET',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // 404 handler for unknown routes
@@ -96,11 +109,22 @@ app.use('*', (req, res) => {
     availableEndpoints: {
       root: '/',
       health: '/api/health',
+      'firebase-test': '/api/firebase-test',
       docs: '/api-docs',
       auth: '/api/auth',
-      projects: '/api/projects',
+      users: '/api/users',
       teams: '/api/teams',
-      users: '/api/users'
+      applications: '/api/applications',
+      projects: '/api/projects',
+      invites: '/api/invites',
+      invitations: '/api/invitations',
+      chats: '/api/chats',
+      notifications: '/api/notifications',
+      tasks: '/api/tasks',
+      documents: '/api/documents',
+      categories: '/api/categories',
+      columns: '/api/columns',
+      frontend: '/api/frontend'
     }
   });
 });
@@ -114,4 +138,4 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
-module.exports = app; 
+module.exports = app; // Force redeploy среда, 28 мая 2025 г. 11:22:07 (MSK)
