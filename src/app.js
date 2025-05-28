@@ -12,6 +12,7 @@ const app = express();
 // CORS configuration
 const corsOptions = {
   origin: [
+    'https://dddf-team-management.netlify.app',
     'https://teal-madeleine-39fdc6.netlify.app',
     'http://localhost:3000',
     'http://localhost:3001',

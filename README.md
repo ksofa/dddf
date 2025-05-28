@@ -1,6 +1,54 @@
-# Taska Backend API
+# DDDF Team Management System
 
-Backend API for the Taska platform - a digital team aggregator platform.
+Система управления командами и проектами с функционалом приглашения исполнителей.
+
+## 🚀 Деплой
+
+### Frontend (Netlify)
+- **URL**: https://dddf-team-management.netlify.app
+- **Статус**: ✅ Задеплоен
+
+### Backend (Render)
+- **Конфигурация**: render.yaml
+- **Health Check**: /api/health
+- **Порт**: 10000
+
+## 📋 Функционал
+
+- ✅ Авторизация через Firebase
+- ✅ Управление проектами
+- ✅ Управление командами
+- ✅ Приглашение исполнителей в команды
+- ✅ Система уведомлений
+- ✅ Управление задачами
+
+## 🔧 Технологии
+
+### Frontend
+- React + TypeScript
+- Vite
+- Tailwind CSS
+- Firebase Auth
+
+### Backend
+- Node.js + Express
+- Firebase Admin SDK
+- CORS настроен для Netlify
+
+## 🌐 API Endpoints
+
+- `GET /api/health` - Health check
+- `POST /api/auth/login` - Авторизация
+- `GET /api/projects` - Список проектов
+- `GET /api/teams` - Список команд
+- `POST /api/teams/:id/invite-simple` - Приглашение в команду
+
+## 📝 Переменные окружения
+
+Необходимо настроить в Render:
+- `NODE_ENV=production`
+- `PORT=10000`
+- Firebase конфигурация
 
 ## Features
 
