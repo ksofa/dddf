@@ -56,17 +56,54 @@ app.use('/api', require('./routes/columns'));
 // Frontend integration API
 app.use('/api/frontend', require('./routes/frontend-api'));
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    name: 'DDDF Team Management API',
+    version: '1.0.0',
+    status: 'running',
+    endpoints: {
+      health: '/api/health',
+      docs: '/api-docs',
+      auth: '/api/auth',
+      projects: '/api/projects',
+      teams: '/api/teams',
+      users: '/api/users'
+    },
+    message: 'Welcome to DDDF Team Management API'
+  });
+});
+
 // Test endpoint for frontend connection
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
-    message: 'Taska Backend API is running',
+    message: 'DDDF Team Management API is running',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// 404 handler for unknown routes
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Route ${req.originalUrl} not found`,
+    availableEndpoints: {
+      root: '/',
+      health: '/api/health',
+      docs: '/api-docs',
+      auth: '/api/auth',
+      projects: '/api/projects',
+      teams: '/api/teams',
+      users: '/api/users'
+    }
+  });
+});
 
 // Error handling
 app.use(errorHandler);
