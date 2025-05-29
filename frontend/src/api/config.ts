@@ -1,7 +1,19 @@
 // API Configuration
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
+const isProduction = import.meta.env.PROD || 
+                    import.meta.env.MODE === 'production' || 
+                    window.location.hostname !== 'localhost';
+
+const API_BASE_URL = isProduction
   ? 'https://dddf-1.onrender.com/api'
   : 'http://localhost:3000/api';
+
+console.log('🌍 Environment:', {
+  'import.meta.env.PROD': import.meta.env.PROD,
+  'import.meta.env.MODE': import.meta.env.MODE,
+  'window.location.hostname': window.location.hostname,
+  'isProduction': isProduction,
+  'API_BASE_URL': API_BASE_URL
+});
 
 export { API_BASE_URL };
 

@@ -35,6 +35,10 @@ const corsOptions = {
 // Middleware
 app.use(helmet());
 app.use(cors(corsOptions));
+
+// Explicit OPTIONS handler for all routes
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 app.use(morgan('dev'));
 
@@ -138,4 +142,4 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
-module.exports = app; // Force redeploy среда, 28 мая 2025 г. 11:22:07 (MSK)
+module.exports = app; 
