@@ -3,6 +3,7 @@ import { Badge } from "../../../../components/ui/badge";
 import { Button } from "../../../../components/ui/button";
 import { logoutUser } from "../../../../api/auth";
 import { useAuth } from "../../../../hooks/useAuth";
+import { useNotifications } from "../../../../hooks/useNotifications";
 
 interface LeftMenuByAnimaProps {
   onViewChange: (view: string) => void;
@@ -11,34 +12,75 @@ interface LeftMenuByAnimaProps {
 }
 
 const menuItems = [
-  { id: "projects", icon: "/project.svg", label: "Проекты", alt: "Projects", roles: ["pm", "executor", "admin"] },
-  { id: "teams", icon: "/team.svg", label: "Команды", alt: "Team", roles: ["pm", "executor", "admin"] },
+  { 
+    id: "projects", 
+    icon: "/project.svg", 
+    label: "Проекты", 
+    alt: "Projects", 
+    roles: ["pm", "executor", "admin"],
+    fallbackIcon: "📁"
+  },
+  { 
+    id: "teams", 
+    icon: "/team.svg", 
+    label: "Команды", 
+    alt: "Team", 
+    roles: ["pm", "executor", "admin"],
+    fallbackIcon: "👥"
+  },
   {
     id: "chats",
     icon: "/chat.svg",
     label: "Чаты",
     alt: "Chat",
     hasNotification: true,
-    roles: ["pm", "executor", "admin"]
+    roles: ["pm", "executor", "admin"],
+    fallbackIcon: "💬"
   },
   { 
     id: "invitations", 
     icon: "/applications.svg", 
     label: "Приглашения", 
     alt: "Invitations",
-    roles: ["pm", "executor"] // PM отправляет приглашения, executor получает
+    roles: ["pm", "executor"],
+    fallbackIcon: "📨"
   },
   { 
     id: "applications", 
     icon: "/applications.svg", 
     label: "Заявки", 
     alt: "Applications", 
-    roles: ["admin"] // Только админ видит заявки на проекты
+    roles: ["admin"],
+    fallbackIcon: "📋"
   }
 ];
 
+// Компонент для иконки с fallback
+const MenuIcon = ({ item, isActive }: { item: any; isActive: boolean }) => {
+  const [imageError, setImageError] = React.useState(false);
+
+  if (imageError) {
+    return (
+      <span className={`text-xl ${isActive ? "filter brightness-0 invert" : ""}`}>
+        {item.fallbackIcon}
+      </span>
+    );
+  }
+
+  return (
+    <img 
+      className={`w-6 h-6 ${isActive ? "filter brightness-0 invert" : ""}`} 
+      alt={item.alt} 
+      src={item.icon}
+      onError={() => setImageError(true)}
+      onLoad={() => setImageError(false)}
+    />
+  );
+};
+
 export const LeftMenuByAnima = ({ onViewChange, activeView, onLogout }: LeftMenuByAnimaProps): JSX.Element => {
   const { user } = useAuth();
+  const { unreadCount } = useNotifications();
   
   const handleLogout = () => {
     logoutUser();
@@ -59,35 +101,33 @@ export const LeftMenuByAnima = ({ onViewChange, activeView, onLogout }: LeftMenu
         {filteredMenuItems.map((item) => (
           <div 
             key={item.id} 
-            className="flex flex-col items-center gap-1 cursor-pointer"
+            className="flex flex-col items-center gap-1 cursor-pointer transition-transform hover:scale-105"
             onClick={() => onViewChange(item.id)}
           >
             <div className="relative">
               <Button
                 variant={activeView === item.id ? "default" : "outline"}
                 size="icon"
-                className={`w-12 h-12 rounded-[100px] ${
+                className={`w-12 h-12 rounded-[100px] transition-all duration-200 ${
                   activeView === item.id 
-                    ? "bg-main-colorsaqua border-main-colorsaqua" 
-                    : "border border-solid border-[#dededf] bg-neutralneutral-100"
+                    ? "bg-main-colorsaqua border-main-colorsaqua shadow-lg" 
+                    : "border border-solid border-[#dededf] bg-neutralneutral-100 hover:bg-gray-50"
                 } p-0`}
               >
-                <img 
-                  className={`w-6 h-6 ${activeView === item.id ? "filter brightness-0 invert" : ""}`} 
-                  alt={item.alt} 
-                  src={item.icon} 
-                />
+                <MenuIcon item={item} isActive={activeView === item.id} />
               </Button>
 
-              {item.hasNotification && (
-                <Badge className="absolute top-1 right-0 w-3 h-3 p-0 flex items-center justify-center bg-main-colorsaqua rounded-full border-[1.5px] border-solid border-[#f4f4f4]">
-                  <span className="sr-only">New notifications</span>
+              {/* Показываем уведомления для чатов и приглашений */}
+              {((item.id === "chats" && unreadCount > 0) || 
+                (item.id === "invitations" && unreadCount > 0)) && (
+                <Badge className="absolute -top-1 -right-1 min-w-[20px] h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs rounded-full border-[1.5px] border-solid border-[#f4f4f4] animate-pulse">
+                  {unreadCount > 99 ? '99+' : unreadCount}
                 </Badge>
               )}
             </div>
 
-            <span className={`font-left-menu font-[number:var(--left-menu-font-weight)] ${
-              activeView === item.id ? "text-main-colorsaqua" : "text-neutralneutral-10"
+            <span className={`font-left-menu font-[number:var(--left-menu-font-weight)] text-center transition-colors duration-200 ${
+              activeView === item.id ? "text-main-colorsaqua font-semibold" : "text-neutralneutral-10 hover:text-main-colorsaqua"
             } text-[length:var(--left-menu-font-size)] leading-[var(--left-menu-line-height)] tracking-[var(--left-menu-letter-spacing)] [font-style:var(--left-menu-font-style)]`}>
               {item.label}
             </span>
@@ -99,13 +139,16 @@ export const LeftMenuByAnima = ({ onViewChange, activeView, onLogout }: LeftMenu
         <Button
           variant="outline"
           size="icon"
-          className="w-12 h-12 rounded-[100px] border border-solid border-[#dededf] bg-neutralneutral-100 p-0"
+          className="w-12 h-12 rounded-[100px] border border-solid border-[#dededf] bg-neutralneutral-100 hover:bg-red-50 hover:border-red-300 transition-all duration-200 p-0"
           onClick={handleLogout}
         >
-          <img className="w-6 h-6" alt="Frame" src="/frame.svg" />
+          <img className="w-6 h-6" alt="Logout" src="/frame.svg" onError={(e) => {
+            (e.target as HTMLImageElement).style.display = 'none';
+            (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-xl">🚪</span>';
+          }} />
         </Button>
 
-        <span className="font-left-menu font-[number:var(--left-menu-font-weight)] text-neutralneutral-20 text-[length:var(--left-menu-font-size)] tracking-[var(--left-menu-letter-spacing)] leading-[var(--left-menu-line-height)] [font-style:var(--left-menu-font-style)]">
+        <span className="font-left-menu font-[number:var(--left-menu-font-weight)] text-neutralneutral-20 hover:text-red-500 transition-colors duration-200 text-[length:var(--left-menu-font-size)] tracking-[var(--left-menu-letter-spacing)] leading-[var(--left-menu-line-height)] [font-style:var(--left-menu-font-style)]">
           Выйти
         </span>
       </div>
