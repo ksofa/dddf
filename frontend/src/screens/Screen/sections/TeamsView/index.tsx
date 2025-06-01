@@ -293,7 +293,14 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                   >
                     ➕ Пригласить в команду
                   </Button>
-                  <Button variant="ghost" className="text-gray-600">
+                  <Button 
+                    variant="outline" 
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // TODO: Добавить функционал удаления участников
+                    }}
+                  >
                     🗑️ Удалить участников
                   </Button>
                 </>
@@ -334,18 +341,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                           <span className="text-blue-600 font-medium">{selectedTeam.teamLead.rating || '9.8'}</span>
                           <span className="text-gray-600">{getRoleLabel(selectedTeam.teamLead.role || 'pm')}</span>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                          </svg>
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                          </svg>
-                        </Button>
                       </div>
                     </div>
                   ) : (
@@ -393,18 +388,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                             <span className="text-gray-600">{getRoleLabel(member.role)}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="sm">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                            </svg>
-                          </Button>
-                        </div>
                       </div>
                     </Card>
                   ))}
@@ -435,11 +418,6 @@ export const TeamsView: React.FC<TeamsViewProps> = ({ onTeamMemberSearch }) => {
                 Создать команду
               </Button>
             )}
-            <Button variant="ghost">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-            </Button>
           </div>
         </div>
 

@@ -6,9 +6,19 @@ import { useNotifications } from "../../../../hooks/useNotifications";
 
 interface HeaderByAnimaProps {
   className?: string;
+  onHomeClick?: () => void;
+  onMobileMenuToggle?: () => void;
+  onNotificationsClick?: () => void;
+  onProfileClick?: () => void;
 }
 
-export const HeaderByAnima = ({ className = "" }: HeaderByAnimaProps): JSX.Element => {
+export const HeaderByAnima = ({ 
+  className = "", 
+  onHomeClick, 
+  onMobileMenuToggle,
+  onNotificationsClick,
+  onProfileClick 
+}: HeaderByAnimaProps): JSX.Element => {
   const { user } = useAuth();
   const { unreadCount, markAsRead } = useNotifications();
 
@@ -31,91 +41,102 @@ export const HeaderByAnima = ({ className = "" }: HeaderByAnimaProps): JSX.Eleme
     if (unreadCount > 0) {
       markAsRead(undefined, true);
     }
+    // Открываем страницу уведомлений
+    if (onNotificationsClick) {
+      onNotificationsClick();
+    }
+  };
+
+  const handleProfileClick = () => {
+    // Открываем профиль пользователя
+    if (onProfileClick) {
+      onProfileClick();
+    }
+  };
+
+  const handleLogoClick = () => {
+    if (onHomeClick) {
+      onHomeClick();
+    }
   };
 
   return (
-    <header className={`flex items-center justify-between w-full px-4 sm:px-6 py-4 bg-white border-b border-[#ececec] ${className}`}>
-      {/* Left section - Date and time */}
-      <div className="flex flex-col items-start gap-1">
+    <header className={`w-full bg-white border-b border-gray-200 ${className}`}>
+      {/* Компактная шапка */}
+      <div className="flex items-center justify-between px-3 py-2">
+        {/* Left section - Mobile menu + Logo */}
         <div className="flex items-center gap-2">
-          <div className="text-neutralneutral-10 font-paragraph-16-medium text-[length:var(--paragraph-16-medium-font-size)] leading-[var(--paragraph-16-medium-line-height)]">
-            {dateInfo.date}
-          </div>
-          <div className="text-neutralneutral-10 font-paragraph-16-medium text-[length:var(--paragraph-16-medium-font-size)] leading-[var(--paragraph-16-medium-line-height)]">
-            {dateInfo.time}
-          </div>
-        </div>
-      </div>
-
-      {/* Middle section - Hidden breadcrumbs (opacity-0 in original) */}
-      <div className="hidden lg:flex items-center opacity-0 gap-1">
-        <div className="flex justify-center gap-2.5 rounded-sm items-center">
-          <div className="text-neutralneutral-10 font-paragraph-16 text-[length:var(--paragraph-16-font-size)] leading-[var(--paragraph-16-line-height)]">
-            Проекты
-          </div>
-        </div>
-        <img className="w-5 h-5" alt="Chevron right" />
-        <div className="font-paragraph-16-medium text-neutralneutral-10 text-[length:var(--paragraph-16-medium-font-size)] leading-[var(--paragraph-16-medium-line-height)]">
-          Разработка личного кабинета МТС и сервиса
-        </div>
-        <img className="w-5 h-5" alt="Chevron right" />
-        <div className="font-paragraph-16-medium text-neutralneutral-60 text-[length:var(--paragraph-16-medium-font-size)] leading-[var(--paragraph-16-medium-line-height)]">
-          Команда
-        </div>
-      </div>
-
-      {/* Right section - Controls and user info */}
-      <div className="flex items-center gap-2">
-        {/* Notification button */}
-        <div className="relative">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-12 rounded-full border-[#dededf] hover:bg-gray-50 transition-colors"
-            onClick={handleNotificationClick}
-          >
-            <img className="w-6 h-6" alt="Notifications" src="/frame-2.svg" onError={(e) => {
-              (e.target as HTMLImageElement).style.display = 'none';
-              (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-xl">🔔</span>';
-            }} />
-          </Button>
-
-          {/* Notification badge */}
-          {unreadCount > 0 && (
-            <Badge className="absolute -top-1 -right-1 min-w-[20px] h-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs rounded-full border-[1.5px] border-solid border-white animate-pulse">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </Badge>
+          {/* Mobile menu button */}
+          {onMobileMenuToggle && (
+            <button 
+              className="sm:hidden p-1.5 hover:bg-gray-100 rounded-md transition-colors" 
+              onClick={onMobileMenuToggle}
+            >
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
           )}
+
+          <button 
+            onClick={handleLogoClick}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+          >
+            {/* Logo icon - компактный */}
+            <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">📋</span>
+            </div>
+            
+            {/* Brand name - только на больших экранах */}
+            <span className="hidden sm:block text-lg font-semibold text-blue-600">Taska</span>
+          </button>
         </div>
 
-        {/* Settings button - скрываем на мобильных */}
-        <Button
-          variant="outline"
-          size="icon"
-          className="hidden sm:flex h-12 rounded-full border-[#dededf] hover:bg-gray-50 transition-colors"
-        >
-          <img className="w-6 h-6" alt="Settings" src="/frame-1.svg" onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-            (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-xl">⚙️</span>';
-          }} />
-        </Button>
+        {/* Right section - компактный блок */}
+        <div className="flex items-center gap-2">
+          {/* Notification button */}
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-full border-gray-200 hover:bg-gray-50 transition-colors"
+              onClick={handleNotificationClick}
+            >
+              <span className="text-sm">🔔</span>
+            </Button>
 
-        {/* User avatar and info */}
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex flex-col items-end">
-            <div className="text-neutralneutral-10 font-paragraph-16-medium text-[length:var(--paragraph-16-medium-font-size)] leading-[var(--paragraph-16-medium-line-height)]">
-              {user?.fullName || user?.displayName || 'Пользователь'}
-            </div>
-            <div className="text-neutralneutral-60 font-paragraph-14 text-[length:var(--paragraph-14-font-size)] leading-[var(--paragraph-14-line-height)]">
-              {user?.roles?.includes('pm') ? 'Руководитель проекта' : 
-               user?.roles?.includes('executor') ? 'Исполнитель' :
-               user?.roles?.includes('admin') ? 'Администратор' : 'Пользователь'}
-            </div>
+            {/* Notification badge */}
+            {unreadCount > 0 && (
+              <Badge className="absolute -top-1 -right-1 min-w-[16px] h-[16px] p-0 flex items-center justify-center bg-red-500 text-white text-xs rounded-full border-2 border-white animate-pulse">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Badge>
+            )}
           </div>
-          
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold text-lg shadow-lg">
-            {(user?.fullName || user?.displayName || 'У').charAt(0).toUpperCase()}
-          </div>
+
+          {/* User profile - компактный блок */}
+          <button 
+            onClick={handleProfileClick}
+            className="flex items-center gap-1.5 hover:bg-gray-50 rounded-lg p-1.5 transition-colors cursor-pointer"
+          >
+            {/* User name - только на больших экранах */}
+            <div className="hidden sm:flex flex-col items-end">
+              <div className="text-xs font-medium text-gray-900 truncate max-w-[60px]">
+                {user?.fullName?.split(' ')[0] || user?.displayName || 'User'}
+              </div>
+              <div className="text-xs text-gray-500">
+                {user?.roles?.includes('admin') ? 'Admin' :
+                 user?.roles?.includes('pm') ? 'PM' : 
+                 user?.roles?.includes('executor') ? 'Exec' : 'User'}
+              </div>
+            </div>
+            
+            {/* User avatar - компактный */}
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold shadow-sm">
+              <span className="text-sm">
+                {(user?.fullName || user?.displayName || 'У').charAt(0).toUpperCase()}
+              </span>
+            </div>
+          </button>
         </div>
       </div>
     </header>

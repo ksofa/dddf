@@ -309,27 +309,6 @@ const TeamMemberSearch: React.FC<TeamMemberSearchProps> = ({ teamId, onBack }) =
                 <h3 className="text-sm font-medium text-gray-700 mb-2">Счет:</h3>
                 <div className="text-2xl font-bold text-green-600">1 000 000₽</div>
               </div>
-
-              <div className="space-y-2">
-                <button className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                  РП
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                  Проекты
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                  Команды
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                  Чаты
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">
-                  Заявки
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded">
-                  Выйти
-                </button>
-              </div>
             </div>
           </div>
 

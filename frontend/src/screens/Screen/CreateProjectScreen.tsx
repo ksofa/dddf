@@ -9,6 +9,7 @@ interface CreateProjectScreenProps {
 
 export const CreateProjectScreen: React.FC<CreateProjectScreenProps> = ({ onBack, onSuccess }) => {
   const [fio, setFio] = useState("");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -27,8 +28,13 @@ export const CreateProjectScreen: React.FC<CreateProjectScreenProps> = ({ onBack
   const handleRemoveFile = () => setFile(null);
 
   const handleSubmit = async () => {
-    if (!fio || !phone || !title || !description) {
+    if (!fio || !title || !description) {
       setError("Пожалуйста, заполните все обязательные поля");
+      return;
+    }
+
+    if (!email && !phone) {
+      setError("Укажите email или номер телефона для связи");
       return;
     }
 
@@ -37,6 +43,7 @@ export const CreateProjectScreen: React.FC<CreateProjectScreenProps> = ({ onBack
     try {
       await createApplication({
         fullName: fio,
+        email: email || undefined,
         phone,
         projectTitle: title,
         projectDescription: description,
@@ -62,6 +69,7 @@ export const CreateProjectScreen: React.FC<CreateProjectScreenProps> = ({ onBack
         <h2 className="text-xl sm:text-2xl font-semibold mb-2">Заявка на проект</h2>
         <div className="bg-[#F8F9FB] rounded-xl p-4 sm:p-6 md:p-8 flex flex-col gap-4 border border-[#ECECEC]">
           <input type="text" placeholder="ФИО *" className="border rounded-lg px-3 sm:px-4 py-2 sm:py-3 bg-white text-sm sm:text-base outline-none" value={fio} onChange={e => setFio(e.target.value)} />
+          <input type="text" placeholder="Email" className="border rounded-lg px-3 sm:px-4 py-2 sm:py-3 bg-white text-sm sm:text-base outline-none" value={email} onChange={e => setEmail(e.target.value)} />
           <input type="text" placeholder="Номер телефона *" className="border rounded-lg px-3 sm:px-4 py-2 sm:py-3 bg-white text-sm sm:text-base outline-none" value={phone} onChange={e => setPhone(e.target.value)} />
           <input type="text" placeholder="Название проекта *" className="border rounded-lg px-3 sm:px-4 py-2 sm:py-3 bg-white text-sm sm:text-base outline-none" value={title} onChange={e => setTitle(e.target.value)} />
           <textarea placeholder="Описание проекта *" className="border rounded-lg px-3 sm:px-4 py-2 sm:py-3 bg-white text-sm sm:text-base outline-none min-h-[80px] resize-none" value={description} onChange={e => setDescription(e.target.value)} />
@@ -92,7 +100,8 @@ export const CreateProjectScreen: React.FC<CreateProjectScreenProps> = ({ onBack
           )}
           {error && <div className="text-red-500 text-xs sm:text-sm text-center bg-red-50 p-3 rounded-lg">{error}</div>}
           <div className="text-xs sm:text-sm text-gray-500 text-center">
-            * - обязательные поля
+            * - обязательные поля<br/>
+            Укажите email или номер телефона для связи
           </div>
         </div>
         <button

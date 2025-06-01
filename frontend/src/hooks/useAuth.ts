@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getCurrentUser, isAuthenticated } from '../api/auth';
+import { getCurrentUser, isAuthenticated, logoutUser } from '../api/auth';
 
 export interface User {
   uid: string;
@@ -37,5 +37,12 @@ export const useAuth = () => {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  return { user, loading };
+  const logout = () => {
+    logoutUser();
+    setUser(null);
+    // Перенаправляем на страницу входа
+    window.location.href = '/';
+  };
+
+  return { user, loading, logout };
 }; 

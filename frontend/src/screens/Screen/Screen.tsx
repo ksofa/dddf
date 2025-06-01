@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { FrameByAnima } from "./sections/FrameByAnima/FrameByAnima";
-import { HeaderByAnima } from "./sections/HeaderByAnima";
+import { HeaderByAnima } from "./sections/HeaderByAnima/HeaderByAnima";
 import { LeftMenuByAnima } from "./sections/LeftMenuByAnima";
+import { MainMenu } from "./sections/MainMenu/MainMenu";
+import { TasksView } from "./sections/TasksView/TasksView";
 import { ProjectsView } from "./sections/ProjectsView";
 import { TeamsView } from "./sections/TeamsView";
 import { ChatsView } from "./sections/ChatsView";
 import { ApplicationsView } from "./sections/ApplicationsView";
+import { NotificationsView } from "./sections/NotificationsView/NotificationsView";
+import { ProfileView } from "./sections/ProfileView/ProfileView";
 import { UniversalInvitationsScreen } from "../Invitations/UniversalInvitationsScreen";
 import { StartScreen } from "./StartScreen";
 import { LoginScreen } from "./LoginScreen";
 import { RegisterScreen } from "./RegisterScreen";
 import { CreateProjectScreen } from "./CreateProjectScreen";
 import TeamMemberSearch from "./sections/TeamsView/TeamMemberSearch";
-import { isAuthenticated } from "../../api/auth";
+import { isAuthenticated, logoutUser } from "../../api/auth";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 
@@ -35,6 +39,7 @@ export const Screen = (): JSX.Element => {
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
+  const { user } = useAuth();
 
   console.log('Current screen:', currentScreen);
   console.log('Active view:', activeView);
@@ -85,6 +90,7 @@ export const Screen = (): JSX.Element => {
 
   const handleLogout = () => {
     console.log('Logout, redirecting to start screen...');
+    logoutUser(); // Очищаем localStorage и Firebase auth
     setCurrentScreen("START");
   };
 
@@ -111,6 +117,18 @@ export const Screen = (): JSX.Element => {
     closeMobileSidebar();
   };
 
+  const handleHomeClick = () => {
+    setActiveView("dashboard");
+  };
+
+  const handleNotificationsClick = () => {
+    setActiveView("notifications");
+  };
+
+  const handleProfileClick = () => {
+    setActiveView("profile");
+  };
+
   const renderView = () => {
     console.log('Rendering view:', activeView);
     switch (activeView) {
@@ -125,9 +143,17 @@ export const Screen = (): JSX.Element => {
         return <ApplicationsView />;
       case "invitations":
         return <UniversalInvitationsScreen />;
+      case "tasks":
+        return <TasksView />;
+      case "notifications":
+        return <NotificationsView />;
+      case "profile":
+        return <ProfileView />;
+      case "dashboard":
+        return <MainMenu onViewChange={setActiveView} activeView={activeView} />;
       default:
-        console.log('Rendering default FrameByAnima');
-        return <FrameByAnima />;
+        console.log('Rendering default MainMenu');
+        return <MainMenu onViewChange={setActiveView} activeView={activeView} />;
     }
   };
 
@@ -160,14 +186,24 @@ export const Screen = (): JSX.Element => {
 
   console.log('Rendering DASHBOARD screen');
 
-  // Мобильные пункты меню
-  const mobileMenuItems = [
-    { id: 'dashboard', label: 'Главная', icon: '🏠' },
-    { id: 'projects', label: 'Проекты', icon: '📋' },
-    { id: 'teams', label: 'Команды', icon: '👥' },
-    { id: 'chats', label: 'Чаты', icon: '💬' },
-    { id: 'applications', label: 'Заявки', icon: '📝' },
+  // Мобильные пункты меню с ролевой фильтрацией
+  const getAllMobileMenuItems = () => [
+    { id: 'dashboard', label: 'Главная', icon: '🏠', roles: [] },
+    { id: 'projects', label: 'Проекты', icon: '📋', roles: ['pm', 'executor', 'admin'] },
+    { id: 'teams', label: 'Команды', icon: '👥', roles: ['pm', 'executor', 'admin'] },
+    { id: 'chats', label: 'Чаты', icon: '💬', roles: ['pm', 'executor', 'admin', 'customer'] },
+    { id: 'invitations', label: 'Приглашения', icon: '📨', roles: ['pm', 'executor'] },
+    { id: 'applications', label: 'Заявки', icon: '📝', roles: ['admin'] },
+    { id: 'notifications', label: 'Уведомления', icon: '📢', roles: ['pm', 'executor', 'admin'] },
+    { id: 'profile', label: 'Профиль', icon: '👤', roles: ['pm', 'executor', 'admin'] },
   ];
+
+  // Фильтруем пункты меню по ролям пользователя
+  const mobileMenuItems = getAllMobileMenuItems().filter(item => {
+    if (item.roles.length === 0) return true; // Показываем всем, если роли не указаны
+    if (!user?.roles) return item.id === 'dashboard'; // Неавторизованным только главную
+    return item.roles.some(role => user.roles.includes(role));
+  });
 
   // Десктопная версия
   return (
@@ -213,16 +249,7 @@ export const Screen = (): JSX.Element => {
       {/* Основной контент */}
       <div className="flex flex-col flex-1 overflow-hidden main-content">
         {/* Заголовок */}
-        <div className="header">
-          {/* Кнопка мобильного меню */}
-          <button className="mobile-header-menu" onClick={toggleMobileSidebar}>
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          
-          <HeaderByAnima onLogout={handleLogout} />
-        </div>
+        <HeaderByAnima onHomeClick={handleHomeClick} onMobileMenuToggle={toggleMobileSidebar} onNotificationsClick={handleNotificationsClick} onProfileClick={handleProfileClick} />
 
         {/* Основной контент */}
         <main className="flex-1 overflow-auto p-responsive">

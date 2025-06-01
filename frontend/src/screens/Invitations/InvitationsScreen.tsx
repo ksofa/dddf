@@ -4,12 +4,23 @@ import { useAuth } from '../../hooks/useAuth';
 
 interface Invitation {
   id: string;
-  projectId: string;
-  projectTitle: string;
+  teamId: string;
+  teamName: string;
+  senderId: string;
   senderName: string;
-  message: string;
-  status: 'pending' | 'accepted' | 'declined';
+  receiverId: string;
+  receiverName: string;
+  receiverEmail: string;
+  projectType: string;
+  rate: string;
+  startDate: string;
+  estimatedDuration: string;
+  estimatedDurationUnit: string;
+  coverLetter: string;
+  techSpecFile?: string;
+  status: 'pending' | 'accepted' | 'rejected';
   createdAt: any;
+  updatedAt: any;
 }
 
 export const InvitationsScreen: React.FC = () => {
@@ -26,7 +37,7 @@ export const InvitationsScreen: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        const response = await apiClient.get('/invitations?status=pending');
+        const response = await apiClient.get('/team-invitations');
         setInvitations(response.data);
       } catch (error: any) {
         console.error('Error fetching invitations:', error);
@@ -46,7 +57,7 @@ export const InvitationsScreen: React.FC = () => {
     try {
       setProcessingId(invitationId);
       
-      await apiClient.post(`/invitations/${invitationId}/accept`);
+      await apiClient.post(`/team-invitations/${invitationId}/respond`, { action: 'accept' });
       
       // Обновляем список приглашений
       setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
@@ -65,7 +76,7 @@ export const InvitationsScreen: React.FC = () => {
     try {
       setProcessingId(invitationId);
       
-      await apiClient.post(`/invitations/${invitationId}/decline`);
+      await apiClient.post(`/team-invitations/${invitationId}/respond`, { action: 'reject' });
       
       // Обновляем список приглашений
       setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
@@ -126,14 +137,21 @@ export const InvitationsScreen: React.FC = () => {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    {invitation.projectTitle}
+                    {invitation.teamName}
                   </h3>
                   <p className="text-sm text-gray-600 mb-2">
                     От: <span className="font-medium">{invitation.senderName}</span>
                   </p>
-                  {invitation.message && (
+                  <div className="text-sm text-gray-600 mb-2 space-y-1">
+                    <p><span className="font-medium">Ставка:</span> {invitation.rate}</p>
+                    <p><span className="font-medium">Дата начала:</span> {invitation.startDate}</p>
+                    {invitation.estimatedDuration && (
+                      <p><span className="font-medium">Длительность:</span> {invitation.estimatedDuration} {invitation.estimatedDurationUnit}</p>
+                    )}
+                  </div>
+                  {invitation.coverLetter && (
                     <p className="text-gray-700 mb-4">
-                      {invitation.message}
+                      {invitation.coverLetter}
                     </p>
                   )}
                   <p className="text-xs text-gray-500">

@@ -74,10 +74,11 @@ router.get('/team-invitations', authenticate, async (req, res) => {
     const userId = req.user.uid;
     const status = req.query.status || 'pending';
 
+    console.log(`🔍 Getting team invitations for user ${userId} with status ${status}`);
+
     const invitationsSnapshot = await db.collection('team_invitations')
-      .where('userId', '==', userId)
+      .where('receiverId', '==', userId)
       .where('status', '==', status)
-      .orderBy('createdAt', 'desc')
       .get();
 
     const invitations = [];
@@ -88,6 +89,14 @@ router.get('/team-invitations', authenticate, async (req, res) => {
       });
     });
 
+    // Сортируем по времени создания в памяти
+    invitations.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || a.createdAt || new Date(0);
+      const bTime = b.createdAt?.toDate?.() || b.createdAt || new Date(0);
+      return bTime - aTime;
+    });
+
+    console.log(`✅ Found ${invitations.length} team invitations for user ${userId}`);
     res.json(invitations);
   } catch (error) {
     console.error('Error getting team invitations:', error);
@@ -113,7 +122,7 @@ router.post('/team-invitations/:invitationId/respond', authenticate, async (req,
 
     const invitation = invitationDoc.data();
 
-    if (invitation.userId !== userId) {
+    if (invitation.receiverId !== userId) {
       return res.status(403).json({ error: 'Нет доступа к этой заявке' });
     }
 
@@ -131,77 +140,99 @@ router.post('/team-invitations/:invitationId/respond', authenticate, async (req,
     });
 
     if (action === 'accept') {
-      const projectRef = db.collection('projects').doc(invitation.projectId);
-      const teamRef = db.collection('teams').doc(invitation.projectId);
+      const teamRef = db.collection('teams').doc(invitation.teamId);
 
-      // Получаем данные проекта
-      const projectDoc = await projectRef.get();
-      if (projectDoc.exists) {
-        const projectData = projectDoc.data();
-        const currentMembers = projectData.members || {};
-        const currentTeamMembers = projectData.teamMembers || [];
-
-        // Добавляем пользователя в members объект
-        currentMembers[userId] = {
-          uid: userId,
-          email: invitation.userEmail,
-          displayName: invitation.userName,
-          roles: req.user.roles || [],
-          joinedAt: admin.firestore.FieldValue.serverTimestamp()
-        };
-
-        // Добавляем пользователя в teamMembers массив, если его там нет
-        if (!currentTeamMembers.includes(userId)) {
-          currentTeamMembers.push(userId);
-        }
-
-        batch.update(projectRef, {
-          members: currentMembers,
-          teamMembers: currentTeamMembers,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-      }
-
-      // Проверяем существование команды и создаем/обновляем
+      // Получаем команду
       const teamDoc = await teamRef.get();
       if (teamDoc.exists) {
         // Команда существует - обновляем
         const teamData = teamDoc.data();
-        const currentTeamMembers = teamData.members || {};
-
-        currentTeamMembers[userId] = {
+        
+        // Получаем текущих участников в разных форматах
+        let currentMembers = [];
+        let currentMemberIds = [];
+        
+        // Обрабатываем массив members
+        if (teamData.members && Array.isArray(teamData.members)) {
+          currentMembers = [...teamData.members];
+        }
+        
+        // Обрабатываем memberIds
+        if (teamData.memberIds && Array.isArray(teamData.memberIds)) {
+          currentMemberIds = [...teamData.memberIds];
+        }
+        
+        // Получаем данные нового участника
+        const newUserDoc = await db.collection('users').doc(userId).get();
+        const newUserData = newUserDoc.exists ? newUserDoc.data() : {};
+        
+        // Создаем объект нового участника (используем обычную дату вместо serverTimestamp)
+        const joinedAt = new Date();
+        const newMember = {
+          id: userId,
           uid: userId,
-          email: invitation.userEmail,
-          name: invitation.userName,
+          name: invitation.receiverName || newUserData.fullName || newUserData.displayName,
+          email: invitation.receiverEmail || newUserData.email,
+          role: 'member',
           roles: req.user.roles || [],
-          joinedAt: admin.firestore.FieldValue.serverTimestamp()
+          joinedAt: joinedAt,
+          ...newUserData
         };
+        
+        // Проверяем, что участник еще не добавлен
+        const isAlreadyInMembers = currentMembers.some(member => 
+          member.id === userId || member.uid === userId
+        );
+        const isAlreadyInMemberIds = currentMemberIds.includes(userId);
+        
+        // Добавляем в массив members, если его там нет
+        if (!isAlreadyInMembers) {
+          currentMembers.push(newMember);
+        }
+        
+        // Добавляем в массив memberIds, если его там нет
+        if (!isAlreadyInMemberIds) {
+          currentMemberIds.push(userId);
+        }
 
+        // Обновляем команду
         batch.update(teamRef, {
-          members: currentTeamMembers,
+          members: currentMembers,
+          memberIds: currentMemberIds,
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
+        
+        console.log(`✅ Updated existing team ${invitation.teamId} with new member ${userId}`);
       } else {
         // Команда не существует - создаем новую
+        const newUserDoc = await db.collection('users').doc(userId).get();
+        const newUserData = newUserDoc.exists ? newUserDoc.data() : {};
+        
+        const joinedAt = new Date();
+        const newMember = {
+          id: userId,
+          uid: userId,
+          name: invitation.receiverName || newUserData.fullName || newUserData.displayName,
+          email: invitation.receiverEmail || newUserData.email,
+          role: 'member',
+          roles: req.user.roles || [],
+          joinedAt: joinedAt,
+          ...newUserData
+        };
+        
         const newTeam = {
-          id: invitation.projectId,
+          id: invitation.teamId,
           projectId: invitation.projectId,
-          name: `Команда проекта ${invitation.projectName}`,
-          description: `Команда для работы над проектом "${invitation.projectName}"`,
+          name: invitation.teamName || `Команда проекта`,
+          description: `Команда для работы над проектом`,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          members: {
-            [userId]: {
-              uid: userId,
-              email: invitation.userEmail,
-              name: invitation.userName,
-              roles: req.user.roles || [],
-              joinedAt: admin.firestore.FieldValue.serverTimestamp()
-            }
-          }
+          members: [newMember],
+          memberIds: [userId]
         };
 
         batch.set(teamRef, newTeam);
+        console.log(`✅ Created new team ${invitation.teamId} with member ${userId}`);
       }
     }
 
@@ -563,7 +594,7 @@ router.post('/invitations/:invitationId/accept', authenticate, async (req, res) 
     if (type === 'team_invitation') {
       const batch = db.batch();
       const projectRef = db.collection('projects').doc(invitation.projectId);
-      const teamRef = db.collection('teams').doc(invitation.projectId);
+      const teamRef = db.collection('teams').doc(invitation.teamId);
 
       // Получаем данные проекта
       const projectDoc = await projectRef.get();
@@ -573,12 +604,13 @@ router.post('/invitations/:invitationId/accept', authenticate, async (req, res) 
         const currentTeamMembers = projectData.teamMembers || [];
 
         // Добавляем пользователя в members объект
+        const joinedAtProject = new Date();
         currentMembers[userId] = {
           uid: userId,
-          email: invitation.userEmail,
-          displayName: invitation.userName,
+          email: invitation.receiverEmail,
+          displayName: invitation.receiverName,
           roles: req.user.roles || [],
-          joinedAt: admin.firestore.FieldValue.serverTimestamp()
+          joinedAt: joinedAtProject
         };
 
         // Добавляем пользователя в teamMembers массив, если его там нет
@@ -598,41 +630,92 @@ router.post('/invitations/:invitationId/accept', authenticate, async (req, res) 
       if (teamDoc.exists) {
         // Команда существует - обновляем
         const teamData = teamDoc.data();
-        const currentTeamMembers = teamData.members || {};
-
-        currentTeamMembers[userId] = {
+        
+        // Получаем текущих участников в разных форматах
+        let currentMembers = [];
+        let currentMemberIds = [];
+        
+        // Обрабатываем массив members
+        if (teamData.members && Array.isArray(teamData.members)) {
+          currentMembers = [...teamData.members];
+        }
+        
+        // Обрабатываем memberIds
+        if (teamData.memberIds && Array.isArray(teamData.memberIds)) {
+          currentMemberIds = [...teamData.memberIds];
+        }
+        
+        // Получаем данные нового участника
+        const newUserDoc = await db.collection('users').doc(userId).get();
+        const newUserData = newUserDoc.exists ? newUserDoc.data() : {};
+        
+        // Создаем объект нового участника (используем обычную дату вместо serverTimestamp)
+        const joinedAt = new Date();
+        const newMember = {
+          id: userId,
           uid: userId,
-          email: invitation.userEmail,
-          name: invitation.userName,
+          name: invitation.receiverName || newUserData.fullName || newUserData.displayName,
+          email: invitation.receiverEmail || newUserData.email,
+          role: 'member',
           roles: req.user.roles || [],
-          joinedAt: admin.firestore.FieldValue.serverTimestamp()
+          joinedAt: joinedAt,
+          ...newUserData
         };
+        
+        // Проверяем, что участник еще не добавлен
+        const isAlreadyInMembers = currentMembers.some(member => 
+          member.id === userId || member.uid === userId
+        );
+        const isAlreadyInMemberIds = currentMemberIds.includes(userId);
+        
+        // Добавляем в массив members, если его там нет
+        if (!isAlreadyInMembers) {
+          currentMembers.push(newMember);
+        }
+        
+        // Добавляем в массив memberIds, если его там нет
+        if (!isAlreadyInMemberIds) {
+          currentMemberIds.push(userId);
+        }
 
+        // Обновляем команду
         batch.update(teamRef, {
-          members: currentTeamMembers,
+          members: currentMembers,
+          memberIds: currentMemberIds,
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
+        
+        console.log(`✅ Updated existing team ${invitation.teamId} with new member ${userId}`);
       } else {
         // Команда не существует - создаем новую
+        const newUserDoc = await db.collection('users').doc(userId).get();
+        const newUserData = newUserDoc.exists ? newUserDoc.data() : {};
+        
+        const joinedAt = new Date();
+        const newMember = {
+          id: userId,
+          uid: userId,
+          name: invitation.receiverName || newUserData.fullName || newUserData.displayName,
+          email: invitation.receiverEmail || newUserData.email,
+          role: 'member',
+          roles: req.user.roles || [],
+          joinedAt: joinedAt,
+          ...newUserData
+        };
+        
         const newTeam = {
-          id: invitation.projectId,
+          id: invitation.teamId,
           projectId: invitation.projectId,
-          name: `Команда проекта ${invitation.projectName}`,
-          description: `Команда для работы над проектом "${invitation.projectName}"`,
+          name: invitation.teamName || `Команда проекта`,
+          description: `Команда для работы над проектом`,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          members: {
-            [userId]: {
-              uid: userId,
-              email: invitation.userEmail,
-              name: invitation.userName,
-              roles: req.user.roles || [],
-              joinedAt: admin.firestore.FieldValue.serverTimestamp()
-            }
-          }
+          members: [newMember],
+          memberIds: [userId]
         };
 
         batch.set(teamRef, newTeam);
+        console.log(`✅ Created new team ${invitation.teamId} with member ${userId}`);
       }
 
       await batch.commit();

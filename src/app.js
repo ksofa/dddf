@@ -52,7 +52,7 @@ app.use('/api/invites', require('./routes/invites'));
 app.use('/api', require('./routes/invitations'));
 app.use('/api', require('./routes/chats'));
 app.use('/api/notifications', require('./routes/notifications'));
-app.use('/api', require('./routes/tasks'));
+app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api', require('./routes/documents'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api', require('./routes/columns'));

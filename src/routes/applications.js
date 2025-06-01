@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../config/firebase');
 const { authenticate } = require('../middleware/auth');
+const multer = require('multer');
+
+// Настройка multer для обработки файлов
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB лимит
+  }
+});
 
 // Получить заявки в зависимости от роли пользователя
 router.get('/', authenticate, async (req, res) => {
@@ -51,6 +61,94 @@ router.get('/', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Error getting applications:', error);
     res.status(500).json({ error: 'Failed to get applications' });
+  }
+});
+
+// Создать новую заявку (без авторизации - для клиентов)
+router.post('/', upload.single('techSpecFile'), async (req, res) => {
+  try {
+    const {
+      fullName,
+      email,
+      phone,
+      projectTitle,
+      projectDescription,
+      techSpec,
+      rate,
+      startDate,
+      estimatedDuration,
+      coverLetter
+    } = req.body;
+
+    console.log('Received application data:', {
+      fullName,
+      email,
+      phone,
+      projectTitle,
+      projectDescription,
+      techSpec,
+      rate,
+      startDate,
+      estimatedDuration,
+      coverLetter,
+      hasFile: !!req.file
+    });
+
+    // Валидация обязательных полей
+    if (!fullName || !projectTitle) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: fullName, projectTitle' 
+      });
+    }
+
+    // Проверяем, что есть хотя бы один способ связи
+    if (!email && !phone) {
+      return res.status(400).json({ 
+        error: 'At least one contact method required: email or phone' 
+      });
+    }
+
+    // Создаем заявку
+    const applicationData = {
+      type: 'client_request',
+      status: 'pending',
+      fullName,
+      email,
+      phone: phone || '',
+      projectTitle,
+      projectDescription: projectDescription || '',
+      techSpec: techSpec || '',
+      rate: rate || 'Договорная',
+      startDate: startDate || null,
+      estimatedDuration: estimatedDuration || null,
+      coverLetter: coverLetter || '',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    // Если есть файл, сохраняем информацию о нем
+    if (req.file) {
+      applicationData.techSpecFile = {
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+        // В реальном проекте здесь бы сохранялся файл в облачное хранилище
+        // Пока просто сохраняем метаданные
+        uploadedAt: new Date()
+      };
+    }
+
+    const applicationRef = await db.collection('applications').add(applicationData);
+    
+    console.log(`✅ New application created: ${applicationRef.id} from ${email}`);
+    
+    res.status(201).json({ 
+      message: 'Application created successfully',
+      applicationId: applicationRef.id
+    });
+  } catch (error) {
+    console.error('Error creating application:', error);
+    res.status(500).json({ error: 'Failed to create application' });
   }
 });
 
@@ -253,11 +351,34 @@ router.post('/:id/approve', authenticate, async (req, res) => {
     
     const projectRef = await db.collection('projects').add(projectData);
     
+    // Создаем команду для проекта
+    const teamData = {
+      name: `Команда проекта: ${projectData.title}`,
+      description: `Команда для проекта "${projectData.title}"`,
+      projectId: projectRef.id,
+      projectTitle: projectData.title,
+      leaderId: pmId,
+      memberIds: [pmId],
+      members: [pmId],
+      status: 'active',
+      createdAt: new Date(),
+      createdBy: userId,
+      createdFrom: 'application'
+    };
+    
+    const teamRef = await db.collection('teams').add(teamData);
+    
+    // Обновляем проект с ID команды
+    await db.collection('projects').doc(projectRef.id).update({
+      teamId: teamRef.id
+    });
+    
     // Обновляем заявку
     await db.collection('applications').doc(applicationId).update({
       status: 'approved',
       assignedTeamLead: pmId,
       projectId: projectRef.id,
+      teamId: teamRef.id,
       approvedAt: new Date(),
       approvedBy: userId
     });
@@ -268,13 +389,15 @@ router.post('/:id/approve', authenticate, async (req, res) => {
       title: 'Новый проект назначен',
       message: `Вам назначен проект: ${projectData.title}`,
       projectId: projectRef.id,
+      teamId: teamRef.id,
       read: false,
       createdAt: new Date()
     });
     
     res.json({ 
-      message: 'Application approved and project created',
-      projectId: projectRef.id
+      message: 'Application approved, project and team created',
+      projectId: projectRef.id,
+      teamId: teamRef.id
     });
   } catch (error) {
     console.error('Error approving application:', error);

@@ -48,12 +48,11 @@ export async function registerUser(data: RegisterData): Promise<AuthResponse> {
   // Получаем custom token от backend
   const customToken = response.data.token;
   
-  // Используем custom token для входа в Firebase и получения ID token
+  // Используем custom token для входа в Firebase
   const userCredential = await signInWithCustomToken(auth, customToken);
-  const idToken = await userCredential.user.getIdToken();
   
-  // Сохраняем ID token и данные пользователя
-  localStorage.setItem('authToken', idToken);
+  // Сохраняем CUSTOM TOKEN (не ID token) и данные пользователя
+  localStorage.setItem('authToken', customToken);
   localStorage.setItem('user', JSON.stringify(response.data.user));
   
   return response.data;
@@ -68,15 +67,14 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
   const customToken = response.data.token;
   console.log('Получен custom token:', customToken);
   
-  // Используем custom token для входа в Firebase и получения ID token
+  // Используем custom token для входа в Firebase
   const userCredential = await signInWithCustomToken(auth, customToken);
-  const idToken = await userCredential.user.getIdToken();
-  console.log('Получен ID token:', idToken);
+  console.log('Успешный вход в Firebase');
   
-  // Сохраняем ID token и данные пользователя
-  localStorage.setItem('authToken', idToken);
+  // Сохраняем CUSTOM TOKEN (не ID token) и данные пользователя
+  localStorage.setItem('authToken', customToken);
   localStorage.setItem('user', JSON.stringify(response.data.user));
-  console.log('authToken сохранён в localStorage:', localStorage.getItem('authToken'));
+  console.log('Custom token сохранён в localStorage');
   
   return response.data;
 }
@@ -99,6 +97,34 @@ export function getAuthToken(): string | null {
   return localStorage.getItem('authToken');
 }
 
+// Обновить токен авторизации
+export async function refreshAuthToken(): Promise<string | null> {
+  try {
+    // Проверяем, есть ли сохраненный токен
+    const storedToken = localStorage.getItem('authToken');
+    if (!storedToken) {
+      console.log('❌ Нет сохраненного токена');
+      logoutUser();
+      return null;
+    }
+    
+    // Проверяем, что пользователь залогинен в Firebase
+    if (!auth.currentUser) {
+      console.log('❌ Нет текущего пользователя Firebase');
+      // Если нет Firebase пользователя, но есть токен, возвращаем его
+      return storedToken;
+    }
+    
+    console.log('✅ Используем сохраненный custom token');
+    return storedToken;
+  } catch (error) {
+    console.error('❌ Ошибка обновления токена:', error);
+    // Очищаем устаревшие данные при ошибке
+    logoutUser();
+    return null;
+  }
+}
+
 // Проверка авторизации
 export function isAuthenticated(): boolean {
   try {
@@ -115,9 +141,17 @@ export function isAuthenticated(): boolean {
       return false;
     }
     
+    // Проверяем, что пользователь залогинен в Firebase
+    if (!auth.currentUser) {
+      console.log('No current Firebase user, clearing auth data');
+      logoutUser();
+      return false;
+    }
+    
     console.log('Auth check:', { 
       hasToken: !!token,
       hasUser: !!user,
+      hasFirebaseUser: !!auth.currentUser,
       userRole: user.role,
       userRoles: user.roles
     });
@@ -125,6 +159,7 @@ export function isAuthenticated(): boolean {
     return true;
   } catch (error) {
     console.error('Error checking authentication:', error);
+    logoutUser();
     return false;
   }
 }

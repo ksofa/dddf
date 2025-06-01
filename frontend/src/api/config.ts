@@ -20,6 +20,7 @@ export { API_BASE_URL };
 // Axios instance configuration
 import axios from 'axios';
 import { auth } from '../config/firebase';
+import { clearAuthAndRedirect, validateAndCleanToken } from '../utils/authUtils';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -35,21 +36,15 @@ export const api = apiClient;
 // Функция для получения свежего токена
 const getValidToken = async (): Promise<string | null> => {
   try {
-    // Сначала пробуем получить токен из localStorage
-    const storedToken = localStorage.getItem('authToken');
-    
-    // Если есть текущий пользователь Firebase, получаем свежий токен
-    if (auth.currentUser) {
-      console.log('🔄 Обновляем токен через Firebase...');
-      const freshToken = await auth.currentUser.getIdToken(true); // force refresh
-      localStorage.setItem('authToken', freshToken);
-      console.log('✅ Токен обновлен');
-      return freshToken;
+    // Сначала проверяем валидность сохраненного токена
+    if (!validateAndCleanToken()) {
+      return null;
     }
     
-    // Иначе используем сохраненный токен
+    // Используем сохраненный custom token
+    const storedToken = localStorage.getItem('authToken');
     if (storedToken) {
-      console.log('🔑 Используем сохраненный токен');
+      console.log('🔑 Используем сохраненный custom token');
       return storedToken;
     }
     
@@ -57,6 +52,7 @@ const getValidToken = async (): Promise<string | null> => {
     return null;
   } catch (error) {
     console.error('❌ Ошибка получения токена:', error);
+    // В случае ошибки пробуем использовать сохраненный токен
     return localStorage.getItem('authToken');
   }
 };
@@ -103,9 +99,8 @@ apiClient.interceptors.response.use(
       }
       
       // Если не удалось обновить токен, очищаем авторизацию
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      console.log('🧹 Очищаем авторизацию из-за невозможности обновить токен');
+      clearAuthAndRedirect();
     }
     
     return Promise.reject(error);

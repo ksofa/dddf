@@ -402,10 +402,10 @@ router.post('/:teamId/invite-simple', authenticate, async (req, res) => {
     
     const userId = req.user.uid;
     const userRoles = req.user.roles || [];
-    const isTeamPM = teamData.pmId === userId;
+    const isTeamPM = teamData.pmId === userId || teamData.leaderId === userId;
     const isAdmin = userRoles.includes('admin');
 
-    console.log('🔐 Access check:', { userId, isTeamPM, isAdmin, userRoles });
+    console.log('🔐 Access check:', { userId, isTeamPM, isAdmin, userRoles, teamPmId: teamData.pmId, teamLeaderId: teamData.leaderId });
 
     if (!isAdmin && !isTeamPM) {
       console.log('❌ Access denied');
@@ -427,6 +427,7 @@ router.post('/:teamId/invite-simple', authenticate, async (req, res) => {
     const invitationData = {
       teamId,
       teamName: teamData.name || 'Команда',
+      projectId: teamData.projectId || null,
       senderId: req.user.uid,
       senderName: req.user.displayName || req.user.email || 'Отправитель',
       receiverId: receiverId.trim(),
@@ -554,10 +555,10 @@ router.post('/:teamId/invite', authenticate, upload.single('techSpecFile'), asyn
     
     const userId = req.user.uid;
     const userRoles = req.user.roles || [];
-    const isTeamPM = teamData.pmId === userId;
+    const isTeamPM = teamData.pmId === userId || teamData.leaderId === userId;
     const isAdmin = userRoles.includes('admin');
 
-    console.log('🔐 Access check:', { userId, isTeamPM, isAdmin, userRoles });
+    console.log('🔐 Access check:', { userId, isTeamPM, isAdmin, userRoles, teamPmId: teamData.pmId, teamLeaderId: teamData.leaderId });
 
     if (!isAdmin && !isTeamPM) {
       console.log('❌ Access denied');
@@ -579,6 +580,7 @@ router.post('/:teamId/invite', authenticate, upload.single('techSpecFile'), asyn
     const invitationData = {
       teamId,
       teamName: teamData.name || 'Команда',
+      projectId: teamData.projectId || null,
       senderId: req.user.uid,
       senderName: req.user.displayName || req.user.email || 'Отправитель',
       receiverId: receiverId.trim(),
@@ -732,16 +734,18 @@ router.post('/:teamId/members', authenticate, async (req, res) => {
     // Проверяем права (только PM команды, admin или team lead могут добавлять участников)
     const currentUserId = req.user.uid;
     const userRoles = req.user.roles || [];
-    const isTeamPM = teamData.pmId === currentUserId;
+    const isTeamPM = teamData.pmId === currentUserId || teamData.leaderId === currentUserId;
     const isAdmin = userRoles.includes('admin');
-    const isTeamLead = teamData.teamLead === currentUserId;
+    const isTeamLead = teamData.teamLead === currentUserId || teamData.leaderId === currentUserId;
     
     console.log('🔐 Access check:', { 
       currentUserId, 
       isTeamPM, 
       isAdmin, 
       isTeamLead,
-      userRoles 
+      userRoles,
+      teamPmId: teamData.pmId,
+      teamLeaderId: teamData.leaderId
     });
     
     if (!isAdmin && !isTeamPM && !isTeamLead) {
@@ -852,19 +856,49 @@ router.get('/:teamId/available-users', authenticate, async (req, res) => {
     const userId = req.user.uid;
     const userRoles = req.user.roles || [];
 
-    // Проверяем права доступа к команде
-    const isTeamPM = teamData.pmId === userId;
+    console.log('🔍 Available users access check:', {
+      userId,
+      userRoles,
+      teamId,
+      teamPmId: teamData.pmId,
+      teamLeaderId: teamData.leaderId,
+      teamName: teamData.name
+    });
+
+    // Проверяем права доступа к команде (более гибкая проверка)
+    const isTeamPM = teamData.pmId === userId || teamData.leaderId === userId;
     const isAdmin = userRoles.includes('admin');
-    const isTeamMember = (teamData.members || []).some(member => 
-      member.id === userId || member.uid === userId
-    );
+    const isTeamMember = (teamData.members || teamData.memberIds || []).some(member => {
+      // Поддерживаем разные форматы участников
+      if (typeof member === 'string') {
+        return member === userId;
+      }
+      return member.id === userId || member.uid === userId;
+    });
+
+    console.log('🔐 Access check results:', {
+      isTeamPM,
+      isAdmin,
+      isTeamMember,
+      hasAccess: isAdmin || isTeamPM || isTeamMember
+    });
 
     if (!isAdmin && !isTeamPM && !isTeamMember) {
+      console.log('❌ Access denied for available-users');
       return res.status(403).json({ error: 'Access denied. You can only view users for your own teams.' });
     }
 
+    console.log('✅ Access granted for available-users');
+
     const currentMembers = teamData.members || teamData.teamMembers || [];
-    const currentMemberIds = currentMembers.map(member => member.id || member.uid);
+    const currentMemberIds = currentMembers.map(member => {
+      if (typeof member === 'string') return member;
+      return member.id || member.uid;
+    });
+
+    // Добавляем PM и лидера в список исключений
+    if (teamData.pmId) currentMemberIds.push(teamData.pmId);
+    if (teamData.leaderId) currentMemberIds.push(teamData.leaderId);
 
     // Получаем всех пользователей
     let usersQuery = db.collection('users');
@@ -892,15 +926,174 @@ router.get('/:teamId/available-users', authenticate, async (req, res) => {
           avatar: userData.avatar || userData.photoURL,
           role: userData.role || 'developer',
           specialization: userData.specialization || userData.profession,
-          rating: userData.rating || (8.0 + Math.random() * 2).toFixed(1)
+          rating: userData.rating || (8.0 + Math.random() * 2).toFixed(1),
+          roles: userData.roles || []
         });
       }
     });
 
+    console.log(`✅ Found ${availableUsers.length} available users for team ${teamId}`);
     res.json(availableUsers);
 
   } catch (error) {
     console.error('Error fetching available users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Получить отправленные приглашения для PM
+router.get('/:teamId/sent-invitations', authenticate, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const userId = req.user.uid;
+    const userRoles = req.user.roles || [];
+
+    // Проверяем авторизацию
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Получаем команду для проверки прав доступа
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    if (!teamDoc.exists) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const teamData = teamDoc.data();
+    const isTeamPM = teamData.pmId === userId || teamData.leaderId === userId;
+    const isAdmin = userRoles.includes('admin');
+
+    if (!isAdmin && !isTeamPM) {
+      return res.status(403).json({ error: 'Access denied. You can only view invitations for your own teams.' });
+    }
+
+    // Получаем приглашения, отправленные этим PM для этой команды
+    const invitationsSnapshot = await db.collection('team_invitations')
+      .where('teamId', '==', teamId)
+      .where('senderId', '==', userId)
+      .get();
+
+    const invitations = [];
+    invitationsSnapshot.forEach(doc => {
+      invitations.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    // Сортируем по времени создания в памяти
+    invitations.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || a.createdAt || new Date(0);
+      const bTime = b.createdAt?.toDate?.() || b.createdAt || new Date(0);
+      return bTime - aTime;
+    });
+
+    console.log(`✅ Found ${invitations.length} sent invitations for team ${teamId} by PM ${userId}`);
+    res.json(invitations);
+
+  } catch (error) {
+    console.error('Error getting sent invitations:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Получить команду по ID
+router.get('/:teamId', authenticate, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const userId = req.user.uid;
+    const userRoles = req.user.roles || [];
+
+    console.log(`🔍 Getting team ${teamId} for user ${userId}`);
+
+    // Получаем команду
+    const teamDoc = await db.collection('teams').doc(teamId).get();
+    if (!teamDoc.exists) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const teamData = { id: teamDoc.id, ...teamDoc.data() };
+
+    // Проверяем права доступа
+    const isTeamPM = teamData.pmId === userId || teamData.leaderId === userId;
+    const isAdmin = userRoles.includes('admin');
+    
+    // Проверяем, является ли пользователь участником команды
+    let isTeamMember = false;
+    if (teamData.memberIds && teamData.memberIds.includes(userId)) {
+      isTeamMember = true;
+    }
+    if (teamData.members && Array.isArray(teamData.members)) {
+      const memberFound = teamData.members.find(member => 
+        member.id === userId || member.uid === userId
+      );
+      if (memberFound) {
+        isTeamMember = true;
+      }
+    }
+    if (teamData.members && typeof teamData.members === 'object') {
+      if (teamData.members[userId]) {
+        isTeamMember = true;
+      }
+    }
+
+    if (!isAdmin && !isTeamPM && !isTeamMember) {
+      return res.status(403).json({ error: 'Access denied. You can only view your own teams.' });
+    }
+
+    // Получаем данные PM
+    if (teamData.pmId) {
+      const pmDoc = await db.collection('users').doc(teamData.pmId).get();
+      if (pmDoc.exists) {
+        teamData.pm = { id: pmDoc.id, ...pmDoc.data() };
+      }
+    } else if (teamData.leaderId) {
+      const pmDoc = await db.collection('users').doc(teamData.leaderId).get();
+      if (pmDoc.exists) {
+        teamData.pm = { id: pmDoc.id, ...pmDoc.data() };
+        teamData.pmId = teamData.leaderId; // Для совместимости
+      }
+    }
+
+    // Обрабатываем участников команды
+    if (teamData.memberIds && teamData.memberIds.length > 0) {
+      // Структура 1: memberIds
+      const members = [];
+      for (const memberId of teamData.memberIds) {
+        const memberDoc = await db.collection('users').doc(memberId).get();
+        if (memberDoc.exists) {
+          members.push({ id: memberDoc.id, ...memberDoc.data() });
+        }
+      }
+      teamData.members = members;
+    } else if (teamData.members && Array.isArray(teamData.members)) {
+      // Структура 2: members уже массив объектов - оставляем как есть
+    } else if (teamData.members && typeof teamData.members === 'object') {
+      // Структура 3: members как объект - преобразуем в массив
+      const membersArray = [];
+      for (const [memberId, memberData] of Object.entries(teamData.members)) {
+        const memberDoc = await db.collection('users').doc(memberId).get();
+        if (memberDoc.exists) {
+          const userData = memberDoc.data();
+          membersArray.push({
+            id: memberId,
+            name: userData.fullName || userData.displayName || memberData.name,
+            email: userData.email || memberData.email,
+            role: memberData.role || memberData.roles?.[0] || 'member',
+            ...userData
+          });
+        }
+      }
+      teamData.members = membersArray;
+    } else {
+      teamData.members = [];
+    }
+
+    console.log(`✅ Team ${teamId} retrieved successfully with ${teamData.members.length} members`);
+    res.json(teamData);
+
+  } catch (error) {
+    console.error('Error getting team:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
