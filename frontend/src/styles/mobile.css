@@ -852,6 +852,44 @@
     flex-direction: column;
     overflow: hidden;
   }
+  
+  /* Стили для левого меню на десктопе */
+  nav[class*="bg-neutralneutral-100"] {
+    background: #f8fafc !important;
+    border-right: 1px solid #e2e8f0 !important;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Улучшенные стили для кнопок меню */
+  nav[class*="bg-neutralneutral-100"] button {
+    transition: all 0.2s ease !important;
+  }
+  
+  nav[class*="bg-neutralneutral-100"] button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  /* Активная кнопка */
+  nav[class*="bg-neutralneutral-100"] button[class*="bg-main-colorsaqua"] {
+    background: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+  }
+  
+  /* Текст под кнопками */
+  nav[class*="bg-neutralneutral-100"] span {
+    color: #64748b !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+  }
+  
+  /* Активный текст */
+  nav[class*="bg-neutralneutral-100"] span[class*="text-main-colorsaqua"] {
+    color: #3b82f6 !important;
+    font-weight: 600 !important;
+  }
 }
 
 /* Мобильное меню показываем только на мобильных устройствах */

@@ -96,12 +96,12 @@ export const LeftMenuByAnima = ({ onViewChange, activeView, onLogout }: LeftMenu
   });
 
   return (
-    <nav className="flex flex-col h-[1000px] items-start justify-between p-6 bg-neutralneutral-100 border-r border-[#ececec]">
-      <div className="flex flex-col items-start gap-6 self-stretch w-full">
+    <nav className="flex flex-col h-full items-center justify-between p-6 bg-neutralneutral-100 border-r border-[#ececec] min-w-[120px]">
+      <div className="flex flex-col items-center gap-6 w-full">
         {filteredMenuItems.map((item) => (
           <div 
             key={item.id} 
-            className="flex flex-col items-center gap-1 cursor-pointer transition-transform hover:scale-105"
+            className="flex flex-col items-center gap-2 cursor-pointer transition-transform hover:scale-105 w-full"
             onClick={() => onViewChange(item.id)}
           >
             <div className="relative">
@@ -126,16 +126,16 @@ export const LeftMenuByAnima = ({ onViewChange, activeView, onLogout }: LeftMenu
               )}
             </div>
 
-            <span className={`font-left-menu font-[number:var(--left-menu-font-weight)] text-center transition-colors duration-200 ${
+            <span className={`font-left-menu font-[number:var(--left-menu-font-weight)] text-center transition-colors duration-200 text-xs max-w-[80px] leading-tight ${
               activeView === item.id ? "text-main-colorsaqua font-semibold" : "text-neutralneutral-10 hover:text-main-colorsaqua"
-            } text-[length:var(--left-menu-font-size)] leading-[var(--left-menu-line-height)] tracking-[var(--left-menu-letter-spacing)] [font-style:var(--left-menu-font-style)]`}>
+            }`}>
               {item.label}
             </span>
           </div>
         ))}
       </div>
 
-      <div className="flex flex-col items-center gap-1">
+      <div className="flex flex-col items-center gap-2 mt-auto">
         <Button
           variant="outline"
           size="icon"
@@ -148,7 +148,7 @@ export const LeftMenuByAnima = ({ onViewChange, activeView, onLogout }: LeftMenu
           }} />
         </Button>
 
-        <span className="font-left-menu font-[number:var(--left-menu-font-weight)] text-neutralneutral-20 hover:text-red-500 transition-colors duration-200 text-[length:var(--left-menu-font-size)] tracking-[var(--left-menu-letter-spacing)] leading-[var(--left-menu-line-height)] [font-style:var(--left-menu-font-style)]">
+        <span className="font-left-menu font-[number:var(--left-menu-font-weight)] text-neutralneutral-20 hover:text-red-500 transition-colors duration-200 text-xs text-center max-w-[80px] leading-tight">
           Выйти
         </span>
       </div>
