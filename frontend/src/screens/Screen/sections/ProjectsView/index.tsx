@@ -38,9 +38,7 @@ export const ProjectsView = () => {
       } else if (user?.roles?.includes('pm')) {
         // PM видит проекты где он назначен PM
         filteredProjects = projectsData.filter(project => 
-          project.pmId === user.uid || 
-          project.teamLead === user.uid ||
-          project.manager === user.uid
+          project.pmId === user.uid
         );
       } else if (user?.roles?.includes('executor')) {
         // Executor видит проекты где он участник команды

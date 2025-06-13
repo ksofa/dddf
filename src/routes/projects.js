@@ -548,7 +548,6 @@ router.get('/:projectId', authenticate, async (req, res) => {
       req.user.roles.includes('admin') ||
       projectData.customerId === req.user.uid ||
       projectData.pmId === req.user.uid ||
-      projectData.teamLead === req.user.uid ||
       (projectData.teamMembers && projectData.teamMembers.includes(req.user.uid));
 
     if (!hasAccess) {
@@ -890,11 +889,94 @@ router.delete('/:projectId',
 );
 
 // Project tasks routes
+// Get project tasks
+router.get('/:projectId/tasks', authenticate, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    // Check if project exists
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const project = projectDoc.data();
+    
+    // Check if user has access to view tasks
+    const canViewTasks = 
+      req.user.roles && req.user.roles.includes('admin') ||
+      project.pmId === req.user.uid ||
+      project.team?.includes(req.user.uid) ||
+      project.teamMembers?.some(member => member.id === req.user.uid || member === req.user.uid);
+    
+    console.log('🔍 Task view permission check (projects.js):', {
+      userId: req.user.uid,
+      userRoles: req.user.roles,
+      projectId: projectId,
+      projectPmId: project.pmId,
+      projectTeam: project.team,
+      canViewTasks: canViewTasks
+    });
+    
+    if (!canViewTasks) {
+      return res.status(403).json({ message: 'Not authorized to view tasks in this project' });
+    }
+
+    // Get all tasks for the project
+    const tasksSnapshot = await db.collection('projects')
+      .doc(projectId)
+      .collection('tasks')
+      .orderBy('createdAt', 'desc')
+      .get();
+
+    const tasks = [];
+    for (const doc of tasksSnapshot.docs) {
+      const taskData = doc.data();
+      
+      // Get assignee details if exists
+      let assigneeDetails = null;
+      if (taskData.assignee) {
+        try {
+          const assigneeDoc = await db.collection('users').doc(taskData.assignee).get();
+          if (assigneeDoc.exists) {
+            const assigneeData = assigneeDoc.data();
+            assigneeDetails = {
+              id: taskData.assignee,
+              fullName: assigneeData.fullName || assigneeData.displayName,
+              email: assigneeData.email,
+              profileImage: assigneeData.profileImage
+            };
+          }
+        } catch (error) {
+          console.error('Error fetching assignee details:', error);
+        }
+      }
+
+      tasks.push({
+        id: doc.id,
+        ...taskData,
+        assigneeDetails
+      });
+    }
+
+    res.json(tasks);
+  } catch (error) {
+    console.error('Get tasks error:', error);
+    res.status(500).json({ message: 'Error fetching tasks' });
+  }
+});
+
 router.post('/:projectId/tasks',
   authenticate,
   [
     body('text').notEmpty().trim(),
-    body('column').notEmpty().trim()
+    body('column').notEmpty().trim(),
+    body('status').optional().isString(),
+    body('assignee').optional().isString(),
+    body('dueDate').optional().isISO8601(),
+    body('priority').optional().isIn(['low', 'medium', 'high', 'critical']),
+    body('color').optional().isString(),
+    body('description').optional().isString()
   ],
   async (req, res) => {
     try {
@@ -904,7 +986,7 @@ router.post('/:projectId/tasks',
       }
 
       const { projectId } = req.params;
-      const { text, column } = req.body;
+      const { text, column, status, assignee, dueDate, priority, color, description } = req.body;
 
       // Check if user is PM of the project
       const projectDoc = await db.collection('projects').doc(projectId).get();
@@ -917,22 +999,13 @@ router.post('/:projectId/tasks',
       // Проверяем права доступа для создания задач
       const canCreateTasks = 
         req.user.roles && req.user.roles.includes('admin') ||
-        project.pmId === req.user.uid ||
-        project.teamLead === req.user.uid ||
-        project.manager === req.user.uid ||
-        (req.user.roles && req.user.roles.includes('pm') && (
-          project.pmId === req.user.uid ||
-          project.teamLead === req.user.uid ||
-          project.manager === req.user.uid
-        ));
+        project.pmId === req.user.uid;
       
       console.log('🔍 Task creation permission check (projects.js):', {
         userId: req.user.uid,
         userRoles: req.user.roles,
         projectId: projectId,
         projectPmId: project.pmId,
-        projectTeamLead: project.teamLead,
-        projectManager: project.manager,
         canCreateTasks: canCreateTasks
       });
       
@@ -940,10 +1013,24 @@ router.post('/:projectId/tasks',
         return res.status(403).json({ message: 'Not authorized to create tasks in this project' });
       }
 
+      // Validate assignee if provided
+      if (assignee) {
+        const assigneeDoc = await db.collection('users').doc(assignee).get();
+        if (!assigneeDoc.exists) {
+          return res.status(400).json({ message: 'Assignee not found' });
+        }
+      }
+
       const taskData = {
         text,
+        title: text, // Also store as title for compatibility
         column,
-        status: 'to-do',
+        status: status || column || 'todo',
+        assignee: assignee || null,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        priority: priority || 'medium',
+        color: color || '#3B82F6',
+        description: description || null,
         createdAt: new Date(),
         createdBy: req.user.uid
       };
@@ -993,22 +1080,13 @@ router.put('/:projectId/tasks/:taskId',
       // Проверяем права доступа для обновления задач
       const canUpdateTasks = 
         req.user.roles && req.user.roles.includes('admin') ||
-        project.pmId === req.user.uid ||
-        project.teamLead === req.user.uid ||
-        project.manager === req.user.uid ||
-        (req.user.roles && req.user.roles.includes('pm') && (
-          project.pmId === req.user.uid ||
-          project.teamLead === req.user.uid ||
-          project.manager === req.user.uid
-        ));
+        project.pmId === req.user.uid;
       
       console.log('🔍 Task update permission check (projects.js):', {
         userId: req.user.uid,
         userRoles: req.user.roles,
         projectId: projectId,
         projectPmId: project.pmId,
-        projectTeamLead: project.teamLead,
-        projectManager: project.manager,
         canUpdateTasks: canUpdateTasks
       });
       
@@ -1084,6 +1162,214 @@ router.delete('/:projectId/tasks/:taskId', authenticate, async (req, res) => {
     console.error('Error deleting task:', error);
     const { status, message } = handleFirebaseError(error);
     res.status(status).json({ error: message });
+  }
+});
+
+// Task comments routes
+// Get task comments
+router.get('/:projectId/tasks/:taskId/comments', authenticate, async (req, res) => {
+  try {
+    const { projectId, taskId } = req.params;
+
+    // Check if project exists and user has access
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const project = projectDoc.data();
+    
+    // Check if user has access to view comments
+    const canViewComments = 
+      req.user.roles && req.user.roles.includes('admin') ||
+      project.pmId === req.user.uid ||
+      project.team?.includes(req.user.uid) ||
+      project.teamMembers?.some(member => member.id === req.user.uid || member === req.user.uid);
+    
+    if (!canViewComments) {
+      return res.status(403).json({ message: 'Not authorized to view comments' });
+    }
+
+    // Check if task exists
+    const taskDoc = await db.collection('projects')
+      .doc(projectId)
+      .collection('tasks')
+      .doc(taskId)
+      .get();
+
+    if (!taskDoc.exists) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Get comments
+    const commentsSnapshot = await db.collection('projects')
+      .doc(projectId)
+      .collection('tasks')
+      .doc(taskId)
+      .collection('comments')
+      .orderBy('createdAt', 'asc')
+      .get();
+
+    const comments = [];
+    for (const doc of commentsSnapshot.docs) {
+      const commentData = doc.data();
+      
+      // Get user details for comment author
+      let authorName = commentData.createdBy;
+      try {
+        const authorDoc = await db.collection('users').doc(commentData.createdBy).get();
+        if (authorDoc.exists) {
+          const authorData = authorDoc.data();
+          authorName = authorData.displayName || authorData.fullName || authorData.email;
+        }
+      } catch (error) {
+        console.error('Error fetching comment author:', error);
+      }
+
+      comments.push({
+        id: doc.id,
+        text: commentData.text,
+        createdBy: authorName,
+        createdAt: commentData.createdAt?.toDate?.() || commentData.createdAt,
+        updatedAt: commentData.updatedAt?.toDate?.() || commentData.updatedAt,
+        mentions: commentData.mentions || []
+      });
+    }
+
+    res.json(comments);
+  } catch (error) {
+    console.error('Get comments error:', error);
+    res.status(500).json({ message: 'Error fetching comments' });
+  }
+});
+
+// Add task comment
+router.post('/:projectId/tasks/:taskId/comments', authenticate, async (req, res) => {
+  try {
+    const { projectId, taskId } = req.params;
+    const { text, mentions = [] } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: 'Comment text is required' });
+    }
+
+    // Check if project exists and user has access
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const project = projectDoc.data();
+    
+    // Check if user has access to add comments
+    const canAddComments = 
+      req.user.roles && req.user.roles.includes('admin') ||
+      project.pmId === req.user.uid ||
+      project.team?.includes(req.user.uid) ||
+      project.teamMembers?.some(member => member.id === req.user.uid || member === req.user.uid);
+    
+    if (!canAddComments) {
+      return res.status(403).json({ message: 'Not authorized to add comments' });
+    }
+
+    // Check if task exists
+    const taskDoc = await db.collection('projects')
+      .doc(projectId)
+      .collection('tasks')
+      .doc(taskId)
+      .get();
+
+    if (!taskDoc.exists) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Add comment
+    const commentData = {
+      text: text.trim(),
+      createdBy: req.user.uid,
+      createdAt: new Date(),
+      mentions: mentions || []
+    };
+
+    const commentRef = await db.collection('projects')
+      .doc(projectId)
+      .collection('tasks')
+      .doc(taskId)
+      .collection('comments')
+      .add(commentData);
+
+    res.status(201).json({
+      message: 'Comment added successfully',
+      commentId: commentRef.id
+    });
+  } catch (error) {
+    console.error('Add comment error:', error);
+    res.status(500).json({ message: 'Error adding comment' });
+  }
+});
+
+// Delete task comment
+router.delete('/:projectId/tasks/:taskId/comments/:commentId', authenticate, async (req, res) => {
+  try {
+    const { projectId, taskId, commentId } = req.params;
+
+    // Check if project exists
+    const projectDoc = await db.collection('projects').doc(projectId).get();
+    if (!projectDoc.exists) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    const project = projectDoc.data();
+
+    // Check if task exists
+    const taskDoc = await db.collection('projects')
+      .doc(projectId)
+      .collection('tasks')
+      .doc(taskId)
+      .get();
+
+    if (!taskDoc.exists) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    // Get comment
+    const commentDoc = await db.collection('projects')
+      .doc(projectId)
+      .collection('tasks')
+      .doc(taskId)
+      .collection('comments')
+      .doc(commentId)
+      .get();
+
+    if (!commentDoc.exists) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
+
+    const commentData = commentDoc.data();
+
+    // Check if user can delete comment (author, PM, or admin)
+    const canDeleteComment = 
+      req.user.roles && req.user.roles.includes('admin') ||
+      project.pmId === req.user.uid ||
+      commentData.createdBy === req.user.uid;
+    
+    if (!canDeleteComment) {
+      return res.status(403).json({ message: 'Not authorized to delete this comment' });
+    }
+
+    // Delete comment
+    await db.collection('projects')
+      .doc(projectId)
+      .collection('tasks')
+      .doc(taskId)
+      .collection('comments')
+      .doc(commentId)
+      .delete();
+
+    res.json({ message: 'Comment deleted successfully' });
+  } catch (error) {
+    console.error('Delete comment error:', error);
+    res.status(500).json({ message: 'Error deleting comment' });
   }
 });
 

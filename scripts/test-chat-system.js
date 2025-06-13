@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const BASE_URL = 'http://localhost:3000/api';
 
-// Тестовые пользователи
+// Тестовые пользователи 
 const PM_USER = {
   email: 'pm@test.test',
   password: 'password123'

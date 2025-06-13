@@ -157,14 +157,7 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
       // Упрощенная логика определения прав PM
       const isUserPM = user && (
         user.roles?.includes('admin') ||
-        user.uid === project.manager ||
-        user.uid === project.pmId ||
-        user.uid === project.teamLead ||
-        (user.roles?.includes('pm') && (
-          user.uid === project.manager || 
-          user.uid === project.pmId ||
-          user.uid === project.teamLead
-        ))
+        user.uid === project.pmId
       );
       
       const isUserExecutor = user && (
@@ -175,11 +168,28 @@ export const ProjectBoardScreen = ({ projectId }: ProjectBoardScreenProps) => {
       console.log('✅ User permissions determined:', {
         isUserPM,
         isUserExecutor,
-        canCreateTasks: isUserPM || user?.roles?.includes('admin')
+        canCreateTasks: isUserPM || user?.roles?.includes('admin'),
+        userUid: user?.uid,
+        projectPmId: project.pmId,
+        uidMatch: user?.uid === project.pmId,
+        hasAdminRole: user?.roles?.includes('admin'),
+        userRoles: user?.roles
       });
       
       setIsProjectPM(isUserPM || false);
       setIsProjectExecutor(isUserExecutor || false);
+      
+      // Дополнительная отладка состояния после установки
+      setTimeout(() => {
+        console.log('🔍 State after setting permissions:', {
+          isProjectPM: isUserPM,
+          isProjectExecutor: isUserExecutor,
+          stateWillBe: {
+            isProjectPM: isUserPM || false,
+            isProjectExecutor: isUserExecutor || false
+          }
+        });
+      }, 100);
       
     } catch (error) {
       console.error('Error loading board:', error);

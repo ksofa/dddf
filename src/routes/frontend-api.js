@@ -1106,11 +1106,11 @@ router.get('/teams', authenticate, async (req, res) => {
     
     let projects = [];
     
-    // Если PM - получаем его проекты (используем manager вместо pmId)
+    // Если PM - получаем его проекты (используем pmId)
     if (userRoles.includes('pm') || userRoles.includes('project_manager')) {
       try {
         const pmProjectsSnapshot = await db.collection('projects')
-          .where('manager', '==', userId)
+          .where('pmId', '==', userId)
           .get();
         
         console.log(`Found ${pmProjectsSnapshot.size} PM projects`);
@@ -1183,8 +1183,8 @@ router.get('/projects/:projectId/team', authenticate, async (req, res) => {
     });
     
     // Проверяем доступ (PM или участник)
-    // Используем pmId как основное поле для PM, manager как fallback
-    const projectManagerId = project.pmId || project.manager;
+    // Используем pmId как основное поле для PM
+    const projectManagerId = project.pmId;
     const hasAccess = projectManagerId === userId || 
                      (project.teamMembers && project.teamMembers.includes(userId));
     
@@ -1312,8 +1312,8 @@ router.post('/projects/:projectId/invite', authenticate, [
     const project = projectDoc.data();
 
     // Проверяем права (только PM проекта)
-    // Используем pmId как основное поле для PM, manager как fallback
-    const projectManagerId = project.pmId || project.manager;
+    // Используем pmId как основное поле для PM
+    const projectManagerId = project.pmId;
     if (projectManagerId !== userId) {
       return res.status(403).json({ error: 'Only project manager can send invitations' });
     }

@@ -34,12 +34,12 @@ export interface UpdateTaskData {
 
 // Получить все задачи пользователя
 export const getTasks = async (): Promise<Task[]> => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('authToken');
   if (!token) {
     throw new Error('No authentication token found');
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/tasks`, {
+  const response = await fetch(`${API_BASE_URL}/tasks`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -57,12 +57,12 @@ export const getTasks = async (): Promise<Task[]> => {
 
 // Создать новую задачу
 export const createTask = async (taskData: CreateTaskData): Promise<Task> => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('authToken');
   if (!token) {
     throw new Error('No authentication token found');
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/tasks`, {
+  const response = await fetch(`${API_BASE_URL}/tasks`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -81,12 +81,12 @@ export const createTask = async (taskData: CreateTaskData): Promise<Task> => {
 
 // Обновить задачу
 export const updateTask = async (taskId: string, updates: UpdateTaskData): Promise<Task> => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('authToken');
   if (!token) {
     throw new Error('No authentication token found');
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+  const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
     method: 'PUT',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -105,12 +105,12 @@ export const updateTask = async (taskId: string, updates: UpdateTaskData): Promi
 
 // Удалить задачу
 export const deleteTask = async (taskId: string): Promise<void> => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('authToken');
   if (!token) {
     throw new Error('No authentication token found');
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+  const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
     method: 'DELETE',
     headers: {
       'Authorization': `Bearer ${token}`,

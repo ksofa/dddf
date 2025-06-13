@@ -10,6 +10,7 @@ import { ChatsView } from "./sections/ChatsView";
 import { ApplicationsView } from "./sections/ApplicationsView";
 import { NotificationsView } from "./sections/NotificationsView/NotificationsView";
 import { ProfileView } from "./sections/ProfileView/ProfileView";
+import { MobileView } from "./sections/MobileView/MobileView";
 import { UniversalInvitationsScreen } from "../Invitations/UniversalInvitationsScreen";
 import { StartScreen } from "./StartScreen";
 import { LoginScreen } from "./LoginScreen";
@@ -39,10 +40,22 @@ export const Screen = (): JSX.Element => {
   const [isLoading, setIsLoading] = React.useState(true);
   const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
+  const [isMobile, setIsMobile] = React.useState(false);
   const { user } = useAuth();
 
   console.log('Current screen:', currentScreen);
   console.log('Active view:', activeView);
+
+  // Определяем мобильное устройство
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Проверяем авторизацию при загрузке
   React.useEffect(() => {
@@ -131,6 +144,12 @@ export const Screen = (): JSX.Element => {
 
   const renderView = () => {
     console.log('Rendering view:', activeView);
+    
+    // На мобильных устройствах показываем специальный мобильный дашборд
+    if (isMobile && activeView === "dashboard") {
+      return <MobileView onViewChange={setActiveView} />;
+    }
+    
     switch (activeView) {
       case "projects":
         console.log('Rendering ProjectsView');
@@ -208,48 +227,61 @@ export const Screen = (): JSX.Element => {
   // Десктопная версия
   return (
     <div className="flex h-screen w-full bg-main-colorsbackground-alt overflow-hidden">
-      {/* Десктопное левое меню */}
-      <div className="mobile-hidden">
-        <LeftMenuByAnima 
-          onViewChange={setActiveView} 
-          activeView={activeView} 
-          onLogout={handleLogout} 
-        />
-      </div>
+      {/* Десктопное левое меню - показываем только на десктопе */}
+      {!isMobile && (
+        <div className="flex-shrink-0">
+          <LeftMenuByAnima 
+            onViewChange={setActiveView} 
+            activeView={activeView} 
+            onLogout={handleLogout} 
+          />
+        </div>
+      )}
 
-      {/* Мобильная боковая панель */}
-      <div className={`mobile-sidebar-overlay ${isMobileSidebarOpen ? 'open' : ''}`} onClick={closeMobileSidebar}></div>
-      <div className={`mobile-sidebar ${isMobileSidebarOpen ? 'open' : ''}`}>
-        <div className="mobile-sidebar-header">
-          <h3 className="text-lg font-semibold">Меню</h3>
-          <button className="mobile-sidebar-close" onClick={closeMobileSidebar}>
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div className="mobile-sidebar-content">
-          {mobileMenuItems.map((item) => (
-            <div
-              key={item.id}
-              className={`mobile-sidebar-item ${activeView === item.id ? 'active' : ''}`}
-              onClick={() => handleMobileViewChange(item.id)}
-            >
-              <span className="mobile-sidebar-item-icon">{item.icon}</span>
-              <span>{item.label}</span>
+      {/* Мобильная боковая панель - показываем только на мобильных */}
+      {isMobile && (
+        <>
+          <div className={`mobile-sidebar-overlay ${isMobileSidebarOpen ? 'open' : ''}`} onClick={closeMobileSidebar}></div>
+          <div className={`mobile-sidebar ${isMobileSidebarOpen ? 'open' : ''}`}>
+            <div className="mobile-sidebar-header">
+              <h3 className="text-lg font-semibold">Меню</h3>
+              <button className="mobile-sidebar-close" onClick={closeMobileSidebar}>
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-          ))}
-          <div className="mobile-sidebar-item" onClick={handleLogout}>
-            <span className="mobile-sidebar-item-icon">🚪</span>
-            <span>Выход</span>
+            <div className="mobile-sidebar-content">
+              {mobileMenuItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`mobile-sidebar-item ${activeView === item.id ? 'active' : ''}`}
+                  onClick={() => handleMobileViewChange(item.id)}
+                >
+                  <span className="mobile-sidebar-item-icon">{item.icon}</span>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+              <div className="mobile-sidebar-item" onClick={handleLogout}>
+                <span className="mobile-sidebar-item-icon">🚪</span>
+                <span>Выход</span>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
 
       {/* Основной контент */}
       <div className="flex flex-col flex-1 overflow-hidden main-content">
-        {/* Заголовок */}
-        <HeaderByAnima onHomeClick={handleHomeClick} onMobileMenuToggle={toggleMobileSidebar} onNotificationsClick={handleNotificationsClick} onProfileClick={handleProfileClick} />
+        {/* Заголовок - скрываем на мобильных устройствах для дашборда */}
+        {!(isMobile && activeView === "dashboard") && (
+          <HeaderByAnima 
+            onHomeClick={handleHomeClick} 
+            onMobileMenuToggle={isMobile ? toggleMobileSidebar : undefined} 
+            onNotificationsClick={handleNotificationsClick} 
+            onProfileClick={handleProfileClick} 
+          />
+        )}
 
         {/* Основной контент */}
         <main className="flex-1 overflow-auto p-responsive">
@@ -257,19 +289,21 @@ export const Screen = (): JSX.Element => {
         </main>
       </div>
 
-      {/* Мобильное нижнее меню */}
-      <div className="mobile-menu">
-        {mobileMenuItems.map((item) => (
-          <div
-            key={item.id}
-            className={`mobile-menu-item ${activeView === item.id ? 'active' : ''}`}
-            onClick={() => setActiveView(item.id)}
-          >
-            <div className="mobile-menu-icon">{item.icon}</div>
-            <div className="mobile-menu-label">{item.label}</div>
-          </div>
-        ))}
-      </div>
+      {/* Мобильное нижнее меню - показываем ТОЛЬКО на мобильных и НЕ для мобильного дашборда */}
+      {isMobile && !(activeView === "dashboard") && (
+        <div className="mobile-menu">
+          {mobileMenuItems.map((item) => (
+            <div
+              key={item.id}
+              className={`mobile-menu-item ${activeView === item.id ? 'active' : ''}`}
+              onClick={() => setActiveView(item.id)}
+            >
+              <div className="mobile-menu-icon">{item.icon}</div>
+              <div className="mobile-menu-label">{item.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

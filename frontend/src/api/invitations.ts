@@ -256,4 +256,14 @@ export const getMyInvitations = getMyTeamInvitations;
 export const respondToInvitation = respondToTeamInvitation;
 
 // Получить отправленные заявки для проекта (для обратной совместимости)
-export const getProjectInvitations = getProjectTeamInvitations; 
+export const getProjectInvitations = getProjectTeamInvitations;
+
+// Принять приглашение
+export const acceptInvitation = async (invitationId: string) => {
+  return respondToTeamInvitation(invitationId, 'accept');
+};
+
+// Отклонить приглашение
+export const declineInvitation = async (invitationId: string) => {
+  return respondToTeamInvitation(invitationId, 'reject');
+}; 
