@@ -11,15 +11,36 @@ const app = express();
 
 // CORS configuration
 const corsOptions = {
-  origin: [
-    'https://dddf-team-management.netlify.app',
-    'https://teal-madeleine-39fdc6.netlify.app',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:5176'
-  ],
+  origin: function (origin, callback) {
+    // Разрешенные домены
+    const allowedOrigins = [
+      'https://dddf-team-management.netlify.app',
+      'https://teal-madeleine-39fdc6.netlify.app',
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5176'
+    ];
+    
+    // Разрешаем запросы без origin (например, Postman)
+    if (!origin) return callback(null, true);
+    
+    // Проверяем точные совпадения
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Проверяем Netlify поддомены
+    if (origin.includes('netlify.app') && 
+        (origin.includes('dddf-team-management') || origin.includes('teal-madeleine'))) {
+      return callback(null, true);
+    }
+    
+    // Логируем заблокированные домены для отладки
+    console.log('🚫 CORS blocked origin:', origin);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
