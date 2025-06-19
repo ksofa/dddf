@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Config Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .info { margin: 10px 0; padding: 10px; border: 1px solid #ccc; background: #f9f9f9; }
+        .error { background: #ffebee; border-color: #e57373; }
+        .success { background: #e8f5e9; border-color: #66bb6a; }
+    </style>
+</head>
+<body>
+    <h1>API Configuration Debug</h1>
+    <div id="results"></div>
+    
+    <script type="module">
+        // Проверяем конфигурацию API
+        const results = document.getElementById('results');
+        
+        function addResult(title, content, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `info ${type}`;
+            div.innerHTML = `<h3>${title}</h3><pre>${content}</pre>`;
+            results.appendChild(div);
+        }
+        
+        // Проверяем переменные окружения
+        addResult('Environment Variables', JSON.stringify({
+            'import.meta.env.PROD': import.meta.env.PROD,
+            'import.meta.env.MODE': import.meta.env.MODE,
+            'import.meta.env.DEV': import.meta.env.DEV,
+            'window.location.hostname': window.location.hostname,
+            'window.location.origin': window.location.origin
+        }, null, 2));
+        
+        // Определяем среду
+        const isProduction = import.meta.env.PROD || 
+                            import.meta.env.MODE === 'production' || 
+                            window.location.hostname !== 'localhost';
+        
+        const API_BASE_URL = isProduction
+            ? 'https://dddf-1.onrender.com/api'
+            : 'http://localhost:3000/api';
+            
+        addResult('Calculated Configuration', JSON.stringify({
+            isProduction,
+            API_BASE_URL
+        }, null, 2), isProduction ? 'success' : 'error');
+        
+        // Тестируем подключение
+        async function testConnection() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                const data = await response.json();
+                addResult('API Connection Test', `✅ Success: ${JSON.stringify(data, null, 2)}`, 'success');
+            } catch (error) {
+                addResult('API Connection Test', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        testConnection();
+    </script>
+</body>
+</html> 

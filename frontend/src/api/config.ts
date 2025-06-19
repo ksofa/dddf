@@ -3,15 +3,25 @@ const isProduction = import.meta.env.PROD ||
                     import.meta.env.MODE === 'production' || 
                     window.location.hostname !== 'localhost';
 
-const API_BASE_URL = isProduction
-  ? 'https://dddf-1.onrender.com/api'
-  : 'http://localhost:3000/api';
+// Проверяем переменные окружения для принудительного использования production API
+const FORCE_PRODUCTION_API = import.meta.env.VITE_FORCE_PRODUCTION_API === 'true' || true; // Временно включено
+
+// Получаем URL из переменной окружения или используем дефолтный
+const PRODUCTION_API_URL = import.meta.env.VITE_API_URL || 'https://dddf-1.onrender.com/api';
+const DEVELOPMENT_API_URL = 'http://localhost:3000/api';
+
+const API_BASE_URL = (isProduction || FORCE_PRODUCTION_API)
+  ? PRODUCTION_API_URL
+  : DEVELOPMENT_API_URL;
 
 console.log('🌍 Environment:', {
   'import.meta.env.PROD': import.meta.env.PROD,
   'import.meta.env.MODE': import.meta.env.MODE,
+  'import.meta.env.VITE_API_URL': import.meta.env.VITE_API_URL,
+  'import.meta.env.VITE_FORCE_PRODUCTION_API': import.meta.env.VITE_FORCE_PRODUCTION_API,
   'window.location.hostname': window.location.hostname,
   'isProduction': isProduction,
+  'FORCE_PRODUCTION_API': FORCE_PRODUCTION_API,
   'API_BASE_URL': API_BASE_URL
 });
 
